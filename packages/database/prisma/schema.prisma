@@ -117,6 +117,7 @@ model User {
   twoFactorSecret   String?
   rememberMe        Boolean             @default(false)
   loyaltyPoints     Int                 @default(0)
+  loyaltyTier       String              @default("BRONZE") // BRONZE, SILVER, GOLD, PLATINUM, DIAMOND
   referralCode      String?             @unique
   referredBy        String?
   createdAt         DateTime            @default(now())

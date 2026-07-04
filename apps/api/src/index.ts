@@ -41,6 +41,8 @@ import paymentRoutes from "./routes/payments";
 import insightRoutes from "./routes/insights";
 import automationRoutes from "./routes/automation";
 import reportRoutes from "./routes/reports";
+import compareRoutes from "./routes/compare";
+import loyaltyRoutes from "./routes/loyalty";
 
 const app = express();
 
@@ -90,6 +92,8 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/insights", insightRoutes);
 app.use("/api/automation", automationRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/compare", compareRoutes);
+app.use("/api/loyalty", loyaltyRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 app.use(errorHandler);

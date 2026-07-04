@@ -40,6 +40,8 @@ const footerCols: Array<{ title: string; links: Array<[string, string]> }> = [
     links: [
       ["Privacy", "/privacy"],
       ["Terms", "/terms"],
+      ["Refund policy", "/refund-policy"],
+      ["FAQ", "/faq"],
       ["Settings", "/settings"],
       ["Forgot password", "/forgot-password"],
     ],

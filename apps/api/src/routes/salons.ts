@@ -150,4 +150,32 @@ router.get("/:slug/slots", validate(slotsSchema, "query"), asyncHandler(async (r
   res.json({ slots });
 }));
 
+router.get("/map-data", asyncHandler(async (req, res) => {
+  const { city, area, lat, lng, radius } = req.query;
+  const where: any = { latitude: { not: null }, longitude: { not: null } };
+  if (city) where.area = { city: { name: { equals: city as string, mode: "insensitive" } } };
+  if (area) where.area = { name: { equals: area as string, mode: "insensitive" } };
+  let salons = await prisma.salon.findMany({
+    where,
+    select: {
+      id: true, name: true, slug: true, latitude: true, longitude: true,
+      rating: true, priceFrom: true, verified: true,
+      images: { take: 1, orderBy: { sort: "asc" }, select: { url: true } },
+    },
+    take: 200,
+  });
+  if (lat && lng && radius) {
+    const latN = Number(lat), lngN = Number(lng), r = Number(radius);
+    salons = salons.filter((s) => {
+      if (s.latitude == null || s.longitude == null) return false;
+      const dLat = ((s.latitude - latN) * Math.PI) / 180;
+      const dLng = ((s.longitude - lngN) * Math.PI) / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos((latN * Math.PI) / 180) * Math.cos((s.latitude * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+      return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) <= r;
+    });
+  }
+  const markers = salons.map((s) => ({ ...s, image: s.images[0]?.url || null, images: undefined }));
+  res.json({ markers, total: markers.length });
+}));
+
 export default router;

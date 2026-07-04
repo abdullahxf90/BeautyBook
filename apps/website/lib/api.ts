@@ -116,6 +116,8 @@ export interface UserInfo {
   avatarUrl: string | null;
   loyaltyPoints: number;
   emailVerified: boolean;
+  phoneVerified?: boolean;
+  twoFactorEnabled?: boolean;
 }
 
 export const rupees = (n: number) => `Rs ${n.toLocaleString("en-PK")}`;

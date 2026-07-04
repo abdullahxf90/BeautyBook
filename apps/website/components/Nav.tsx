@@ -16,6 +16,7 @@ const navLinks: Array<{ label: string; href: string; children?: Array<{ label: s
       { label: "Blog", href: "/blog" },
       { label: "Beauty Tips", href: "/tips" },
       { label: "Gift Cards", href: "/gift-cards" },
+      { label: "Smart Search", href: "/smart-search" },
       { label: "Memberships", href: "/memberships" },
       { label: "AI Assistant", href: "/ai-assistant" },
       { label: "Chat", href: "/chat" },
@@ -105,7 +106,7 @@ export default function Nav() {
               </Link>
             )}
             {user.role === "STAFF" && (
-              <Link href="/staff-dashboard" style={{ fontSize: 13, fontWeight: 600, color: "#B06A85", textDecoration: "none", padding: "9px 12px", border: "1px solid rgba(176,106,133,.3)", borderRadius: 14 }}>
+              <Link href="/staff" style={{ fontSize: 13, fontWeight: 600, color: "#B06A85", textDecoration: "none", padding: "9px 12px", border: "1px solid rgba(176,106,133,.3)", borderRadius: 14 }}>
                 Staff Dashboard
               </Link>
             )}
@@ -132,7 +133,7 @@ export default function Nav() {
             )
           ))}
           {user?.role === "STAFF" && (
-            <Link href="/staff-dashboard" onClick={() => setMobileOpen(false)} style={{ fontSize: 16, fontWeight: 500, color: "#B06A85", textDecoration: "none" }}>Staff Dashboard</Link>
+            <Link href="/staff" onClick={() => setMobileOpen(false)} style={{ fontSize: 16, fontWeight: 500, color: "#B06A85", textDecoration: "none" }}>Staff Dashboard</Link>
           )}
         </div>
       )}

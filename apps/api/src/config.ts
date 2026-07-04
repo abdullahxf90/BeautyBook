@@ -12,4 +12,7 @@ export const config = {
   easypaisaMerchantId: process.env.EASYPAISA_MERCHANT_ID || "",
   easypaisaEndpoint: process.env.EASYPAISA_ENDPOINT || "",
   apiBaseUrl: process.env.API_BASE_URL || "http://localhost:4000",
+  googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+  facebookAppId: process.env.FACEBOOK_APP_ID || "",
+  appleClientId: process.env.APPLE_CLIENT_ID || "",
 };

@@ -20,6 +20,12 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [msg, setMsg] = useState("");
+  const [emailToken, setEmailToken] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [twoFaCode, setTwoFaCode] = useState("");
+  const [twoFaSetupStarted, setTwoFaSetupStarted] = useState(false);
+  const [twoFaPassword, setTwoFaPassword] = useState("");
 
   useEffect(() => {
     if (!loading && !user) router.push("/login?next=/settings");
@@ -47,6 +53,18 @@ export default function SettingsPage() {
       setNewPassword("");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Password change failed");
+    }
+  };
+
+  const call = async (path: string, body: object, successMsg: string, after?: () => void) => {
+    if (!token) return;
+    try {
+      await api(path, { method: "POST", token, body: JSON.stringify(body) });
+      await refreshUser();
+      setMsg(successMsg);
+      after?.();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Request failed");
     }
   };
 
@@ -95,6 +113,70 @@ export default function SettingsPage() {
                 <input className="bb-input" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" />
                 <input className="bb-input" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password (min 8 characters)" />
                 <button onClick={() => void changePassword()} disabled={!currentPassword || newPassword.length < 8} className="bb-btn" style={{ padding: "12px 0", borderRadius: 14, border: "1px solid rgba(28,28,28,.15)", background: "transparent", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: !currentPassword || newPassword.length < 8 ? 0.5 : 1 }}>Change password</button>
+              </div>
+              <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(28,28,28,.08)" }}>
+                <h2 style={{ fontFamily: serif, fontSize: 26, fontWeight: 600 }}>Account verification</h2>
+                <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 18 }}>
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 600 }}>
+                      Email {user.emailVerified ? <span style={{ color: "#2e7d52" }}>✓ Verified</span> : <span style={{ color: "#a33" }}>· Not verified</span>}
+                    </p>
+                    {!user.emailVerified && (
+                      <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                        <input className="bb-input" value={emailToken} onChange={e => setEmailToken(e.target.value)} placeholder="Verification token (check Notifications)" style={{ flex: "1 1 240px" }} />
+                        <button onClick={() => void call("/api/auth/verify-email", { token: emailToken }, "Email verified.", () => setEmailToken(""))} disabled={!emailToken} className="bb-btn" style={{ padding: "11px 18px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: emailToken ? 1 : 0.5 }}>Verify</button>
+                        <button onClick={() => void call("/api/auth/resend-verification", {}, "Verification token sent to your notifications.")} style={{ padding: "11px 18px", borderRadius: 14, border: "1px solid rgba(28,28,28,.15)", background: "transparent", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Resend</button>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 600 }}>
+                      Phone {user.phoneVerified ? <span style={{ color: "#2e7d52" }}>✓ Verified</span> : <span style={{ color: "#a33" }}>· Not verified</span>}
+                    </p>
+                    {!user.phoneVerified && (
+                      user.phone ? (
+                        <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                          {phoneOtpSent && (
+                            <input className="bb-input" inputMode="numeric" maxLength={6} value={phoneCode} onChange={e => setPhoneCode(e.target.value.replace(/\D/g, ""))} placeholder="6-digit code" style={{ flex: "1 1 160px" }} />
+                          )}
+                          {phoneOtpSent ? (
+                            <button onClick={() => void call("/api/auth/verify-otp", { code: phoneCode }, "Phone verified.", () => { setPhoneCode(""); setPhoneOtpSent(false); })} disabled={phoneCode.length !== 6} className="bb-btn" style={{ padding: "11px 18px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: phoneCode.length === 6 ? 1 : 0.5 }}>Verify code</button>
+                          ) : (
+                            <button onClick={() => void call("/api/auth/send-otp", {}, "Code sent to your notifications.", () => setPhoneOtpSent(true))} style={{ padding: "11px 18px", borderRadius: 14, border: "1px solid rgba(28,28,28,.15)", background: "transparent", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Send verification code</button>
+                          )}
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>Add a phone number in the Profile tab first.</p>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(28,28,28,.08)" }}>
+                <h2 style={{ fontFamily: serif, fontSize: 26, fontWeight: 600 }}>Two-factor authentication</h2>
+                {user.twoFactorEnabled ? (
+                  <div style={{ marginTop: 10 }}>
+                    <p style={{ fontSize: 14, color: "#2e7d52", fontWeight: 600 }}>✓ Two-factor authentication is on. You&apos;ll enter a code at each login.</p>
+                    <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                      <input className="bb-input" type="password" value={twoFaPassword} onChange={e => setTwoFaPassword(e.target.value)} placeholder="Confirm password to disable" style={{ flex: "1 1 240px" }} />
+                      <button onClick={() => void call("/api/auth/2fa/disable", { password: twoFaPassword }, "Two-factor authentication disabled.", () => setTwoFaPassword(""))} disabled={!twoFaPassword} style={{ padding: "11px 18px", borderRadius: 14, border: "1px solid rgba(163,51,51,.3)", background: "transparent", color: "#a33", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: twoFaPassword ? 1 : 0.5 }}>Disable 2FA</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10 }}>
+                    <p style={{ fontSize: 14, color: "#5a5457" }}>Add a second step at login: we send a 6-digit code to your account notifications.</p>
+                    <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                      {twoFaSetupStarted && (
+                        <input className="bb-input" inputMode="numeric" maxLength={6} value={twoFaCode} onChange={e => setTwoFaCode(e.target.value.replace(/\D/g, ""))} placeholder="6-digit code" style={{ flex: "1 1 160px" }} />
+                      )}
+                      {twoFaSetupStarted ? (
+                        <button onClick={() => void call("/api/auth/2fa/enable", { code: twoFaCode }, "Two-factor authentication enabled.", () => { setTwoFaCode(""); setTwoFaSetupStarted(false); })} disabled={twoFaCode.length !== 6} className="bb-btn" style={{ padding: "11px 18px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: twoFaCode.length === 6 ? 1 : 0.5 }}>Confirm &amp; enable</button>
+                      ) : (
+                        <button onClick={() => void call("/api/auth/2fa/setup", {}, "Setup code sent to your notifications.", () => setTwoFaSetupStarted(true))} className="bb-btn" style={{ padding: "11px 18px", borderRadius: 14, border: "none", background: "#B06A85", color: "#FAF8F7", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Enable 2FA</button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid rgba(28,28,28,.08)" }}>
                 <h2 style={{ fontFamily: serif, fontSize: 26, fontWeight: 600 }}>Sessions</h2>

@@ -172,4 +172,30 @@ router.delete("/timeline/:id", asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+const goalTimelineSchema = z.object({
+  title: z.string().min(2).max(200),
+  description: z.string().max(500).optional(),
+  date: z.string().refine((v) => !isNaN(Date.parse(v)), { message: "Invalid date" }),
+  type: z.enum(["BOOKING", "GOAL_STEP", "MILESTONE"]).default("GOAL_STEP"),
+});
+
+router.post("/goals/:id/timeline", validate(goalTimelineSchema), asyncHandler(async (req, res) => {
+  const goal = await prisma.beautyGoal.findFirst({
+    where: { id: req.params.id, userId: req.user!.id },
+  });
+  if (!goal) throw new ApiError(404, "Goal not found");
+  const data = getValidated<z.infer<typeof goalTimelineSchema>>(req);
+  const entry = await prisma.beautyTimeline.create({
+    data: {
+      userId: req.user!.id,
+      goalId: req.params.id,
+      title: data.title,
+      description: data.description,
+      date: new Date(data.date),
+      type: data.type,
+    },
+  });
+  res.status(201).json({ entry });
+}));
+
 export default router;

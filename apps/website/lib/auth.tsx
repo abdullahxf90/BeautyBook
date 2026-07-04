@@ -7,7 +7,8 @@ interface AuthState {
   user: UserInfo | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ requiresTwoFactor: boolean; challengeToken?: string }>;
+  verifyTwoFactor: (challengeToken: string, code: string) => Promise<void>;
   register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -61,9 +62,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applySession]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await api<{ user: UserInfo; accessToken: string; refreshToken: string }>("/api/auth/login", {
+    const res = await api<
+      { user: UserInfo; accessToken: string; refreshToken: string } | { requiresTwoFactor: true; challengeToken: string }
+    >("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
+    });
+    if ("requiresTwoFactor" in res) {
+      return { requiresTwoFactor: true, challengeToken: res.challengeToken };
+    }
+    applySession(res.user, res.accessToken, res.refreshToken);
+    return { requiresTwoFactor: false };
+  }, [applySession]);
+
+  const verifyTwoFactor = useCallback(async (challengeToken: string, code: string) => {
+    const res = await api<{ user: UserInfo; accessToken: string; refreshToken: string }>("/api/auth/login/verify-2fa", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken, code }),
     });
     applySession(res.user, res.accessToken, res.refreshToken);
   }, [applySession]);
@@ -94,8 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   const value = useMemo(
-    () => ({ user, token, loading, login, register, logout, refreshUser }),
-    [user, token, loading, login, register, logout, refreshUser],
+    () => ({ user, token, loading, login, verifyTwoFactor, register, logout, refreshUser }),
+    [user, token, loading, login, verifyTwoFactor, register, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
