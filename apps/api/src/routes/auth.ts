@@ -122,4 +122,30 @@ router.post("/change-password", requireAuth, validate(passwordSchema), asyncHand
   res.json({ ok: true });
 }));
 
+// Forgot password — generates a reset token
+router.post("/forgot-password", validate(z.object({ email: z.string().email() })), asyncHandler(async (req, res) => {
+  const { email } = getValidated<{ email: string }>(req);
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (user) {
+    const resetToken = signAccessToken({ sub: user.id, role: user.role });
+    await prisma.notification.create({
+      data: { userId: user.id, title: "Password reset requested", body: `Use this token to reset: ${resetToken}` },
+    });
+  }
+  // Always return OK to prevent email enumeration
+  res.json({ ok: true });
+}));
+
+// Reset password
+router.post("/reset-password", validate(z.object({ token: z.string(), password: z.string().min(8).max(100) })), asyncHandler(async (req, res) => {
+  const { token, password } = getValidated<{ token: string; password: string }>(req);
+  let payload;
+  try { payload = verifyRefreshToken(token); } catch { throw new ApiError(400, "Invalid or expired reset token"); }
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+  if (!user) throw new ApiError(404, "User not found");
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(password, 10) } });
+  await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+  res.json({ ok: true });
+}));
+
 export default router;

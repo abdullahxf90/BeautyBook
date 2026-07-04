@@ -7,10 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ──────────────────────────────────────────────
+// ENUMS
+// ──────────────────────────────────────────────
+
 enum Role {
   CUSTOMER
   OWNER
+  STAFF
+  RECEPTIONIST
+  MANAGER
   ADMIN
+  SUPER_ADMIN
 }
 
 enum Gender {
@@ -22,7 +30,11 @@ enum Gender {
 enum BookingStatus {
   PENDING
   CONFIRMED
+  ARRIVED
+  IN_PROGRESS
   COMPLETED
+  REVIEW_REQUESTED
+  CLOSED
   CANCELLED
   NO_SHOW
 }
@@ -30,6 +42,7 @@ enum BookingStatus {
 enum PaymentMethod {
   CASH
   CARD
+  STRIPE
   JAZZCASH
   EASYPAISA
 }
@@ -39,6 +52,7 @@ enum PaymentStatus {
   PAID
   REFUNDED
   FAILED
+  PARTIALLY_REFUNDED
 }
 
 enum CouponType {
@@ -46,29 +60,187 @@ enum CouponType {
   FIXED
 }
 
-model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  phone         String?  @unique
-  name          String
-  passwordHash  String
-  role          Role     @default(CUSTOMER)
-  avatarUrl     String?
-  emailVerified Boolean  @default(false)
-  phoneVerified Boolean  @default(false)
-  loyaltyPoints Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  bookings      Booking[]
-  reviews       Review[]
-  favorites     Favorite[]
-  notifications Notification[]
-  refreshTokens RefreshToken[]
-  loyaltyTxns   LoyaltyTransaction[]
-  salons        Salon[]              @relation("SalonOwner")
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
 }
 
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  EMAIL
+  SMS
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// ──────────────────────────────────────────────
+// AUTHENTICATION
+// ──────────────────────────────────────────────
+
+model User {
+  id                String              @id @default(cuid())
+  email             String              @unique
+  phone             String?             @unique
+  name              String
+  passwordHash      String
+  role              Role                @default(CUSTOMER)
+  avatarUrl         String?
+  coverUrl          String?
+  emailVerified     Boolean             @default(false)
+  phoneVerified     Boolean             @default(false)
+  twoFactorEnabled  Boolean             @default(false)
+  twoFactorSecret   String?
+  rememberMe        Boolean             @default(false)
+  loyaltyPoints     Int                 @default(0)
+  referralCode      String?             @unique
+  referredBy        String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  // Relations
+  bookings            Booking[]
+  reviews             Review[]
+  favorites           Favorite[]
+  notifications       Notification[]
+  refreshTokens       RefreshToken[]
+  loyaltyTxns         LoyaltyTransaction[]
+  salons              Salon[]             @relation("SalonOwner")
+  addresses           Address[]
+  walletTxns          WalletTransaction[]
+  giftCardPurchases   GiftCard[]          @relation("Purchaser")
+  giftCardClaims      GiftCard[]          @relation("Recipient")
+  memberships         UserMembership[]
+  aiConversations     AIConversation[]
+  securityLogs        SecurityLog[]
+  devices             UserDevice[]
+  reviewHelpful       ReviewHelpful[]
+  emailVerifications  EmailVerification[]
+  otpCodes            OtpCode[]
+  passwordResets      PasswordReset[]
+  loginHistory        LoginHistory[]
+  sessions            Session[]
+  userRoles           UserRole[]
+  beautyPassport      BeautyPassport?
+  beautyGoals         BeautyGoal[]
+  beautyTimeline      BeautyTimeline[]
+  savedSearches       SavedSearch[]
+  savedStyles         SavedStyle[]
+  recentlyViewed      RecentlyViewed[]
+  continueBookings    ContinueBooking[]
+  customerStatistics  CustomerStatistic[]
+  crmNotes            CrmNote[]           @relation("CrmNoteAuthor")
+  conversations       Conversation[]      @relation("ConversationParticipant")
+  messages            Message[]
+  supportTickets      SupportTicket[]
+  ticketMessages      TicketMessage[]
+  auditLogs           AuditLog[]
+  staff               Staff[]
+  referralAwards      ReferralReward[]    @relation("Referrer")
+  referralClaims      ReferralReward[]    @relation("Claimant")
+  reviewsOnStaff      StaffReview[]
+  sentGiftCardTxns    GiftCardTransaction[] @relation("Sender")
+  receivedGiftCardTxns GiftCardTransaction[] @relation("Receiver")
+}
+
+// Sessions
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+// Email verification tokens
+model EmailVerification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// OTP codes for phone verification
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  type      String   // PHONE_VERIFICATION, LOGIN, PASSWORD_RESET
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+}
+
+// Password reset tokens
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Login history
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  String   @default("EMAIL") // EMAIL, GOOGLE, APPLE, FACEBOOK, PHONE
+  ipAddress String?
+  userAgent String?
+  deviceId  String?
+  success   Boolean  @default(true)
+  failReason String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Refresh tokens
 model RefreshToken {
   id        String   @id @default(cuid())
   token     String   @unique
@@ -80,10 +252,73 @@ model RefreshToken {
   @@index([userId])
 }
 
+// Roles & Permissions
+model Permission {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  slug        String          @unique
+  description String?
+  group       String?         // Module grouping
+  rolePermissions RolePermission[]
+
+  @@index([group])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  role         Role
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role
+
+  @@unique([userId, role])
+  @@index([userId])
+}
+
+// ──────────────────────────────────────────────
+// LOCATION
+// ──────────────────────────────────────────────
+
+model Country {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  code   String  @unique // ISO code
+  states State[]
+  cities City[]
+  salons Salon[]
+}
+
+model State {
+  id        String   @id @default(cuid())
+  name      String
+  countryId String
+  country   Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  cities    City[]
+
+  @@unique([name, countryId])
+}
+
 model City {
-  id    String @id @default(cuid())
-  name  String @unique
-  areas Area[]
+  id      String @id @default(cuid())
+  name    String
+  stateId String?
+  state   State? @relation(fields: [stateId], references: [id])
+  countryId String
+  country Country @relation(fields: [countryId], references: [id])
+  areas   Area[]
+
+  salons Salon[]
+
+  @@index([name])
+  @@unique([name, countryId])
 }
 
 model Area {
@@ -91,10 +326,17 @@ model Area {
   name   String
   cityId String
   city   City    @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  postalCode String?
+
   salons Salon[]
+  branches SalonBranch[]
 
   @@unique([name, cityId])
 }
+
+// ──────────────────────────────────────────────
+// CATEGORIES
+// ──────────────────────────────────────────────
 
 model Category {
   id       String    @id @default(cuid())
@@ -102,51 +344,149 @@ model Category {
   slug     String    @unique
   mark     String
   tint     String
+  parentId String?
+  parent   Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  sortOrder Int      @default(0)
+
   services Service[]
+  salons   SalonCategory[]
+
+  @@index([parentId])
 }
 
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  icon        String?
+  sortOrder   Int       @default(0)
+
+  services    Service[]
+}
+
+model ServiceTag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  services  ServiceTagMapping[]
+}
+
+model ServiceTagMapping {
+  id        String     @id @default(cuid())
+  serviceId String
+  service   Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       ServiceTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, tagId])
+}
+
+// ──────────────────────────────────────────────
+// SALON
+// ──────────────────────────────────────────────
+
 model Salon {
-  id             String  @id @default(cuid())
-  slug           String  @unique
-  name           String
-  description    String
-  address        String
-  phone          String
-  email          String?
-  areaId         String
-  area           Area    @relation(fields: [areaId], references: [id])
-  ownerId        String?
-  owner          User?   @relation("SalonOwner", fields: [ownerId], references: [id])
-  rating         Float   @default(0)
-  reviewCount    Int     @default(0)
-  priceFrom      Int     @default(0)
-  premium        Boolean @default(false)
-  featured       Boolean @default(false)
-  trending       Boolean @default(false)
-  verified       Boolean @default(false)
-  homeService    Boolean @default(false)
-  instantBooking Boolean @default(true)
-  gender         Gender  @default(UNISEX)
-  latitude       Float?
-  longitude      Float?
-  tag            String?
+  id              String  @id @default(cuid())
+  slug            String  @unique
+  name            String
+  description     String
+  shortDesc       String?
+  address         String
+  phone           String
+  email           String?
+  website         String?
+  areaId          String
+  area            Area    @relation(fields: [areaId], references: [id])
+  cityId          String?
+  city            City?   @relation(fields: [cityId], references: [id])
+  countryId       String?
+  country         Country? @relation(fields: [countryId], references: [id])
+  ownerId         String?
+  owner           User?   @relation("SalonOwner", fields: [ownerId], references: [id])
+  rating          Float   @default(0)
+  reviewCount     Int     @default(0)
+  priceFrom       Int     @default(0)
+  premium         Boolean @default(false)
+  featured        Boolean @default(false)
+  trending        Boolean @default(false)
+  verified        Boolean @default(false)
+  homeService     Boolean @default(false)
+  instantBooking  Boolean @default(true)
+  gender          Gender  @default(UNISEX)
+  latitude        Float?
+  longitude       Float?
+  tag             String?
+  taxNumber       String?
+  establishedYear Int?
+  employeeCount   Int     @default(0)
+  totalBookings   Int     @default(0)
+  totalRevenue    Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  images       SalonImage[]
-  services     Service[]
-  employees    Employee[]
-  workingHours WorkingHour[]
-  bookings     Booking[]
-  reviews      Review[]
-  favorites    Favorite[]
-  coupons      Coupon[]
+  // Relations
+  images          SalonImage[]
+  videos          SalonVideo[]
+  services        Service[]
+  employees       Employee[]
+  staff           Staff[]
+  workingHours    WorkingHour[]
+  holidays        SalonHoliday[]
+  bookings        Booking[]
+  reviews         Review[]
+  favorites       Favorite[]
+  coupons         Coupon[]
+  policy          SalonPolicy?
+  verification    BusinessVerification?
+  analyticsEvents AnalyticsEvent[]
+  branches        SalonBranch[]
+  portfolio       SalonPortfolio[]
+  certificates    SalonCertificate[]
+  documents       SalonDocument[]
+  categories      SalonCategory[]
+  settings        SalonSetting[]
+  subscription    SalonSubscription?
+  billing         SalonBilling[]
+  statistics      SalonStatistic[]
+  crmCustomers    CrmCustomer[]
+  crmCampaigns    CrmCampaign[]
+  products        Product[]
+  inventory       Inventory[]
+  stockHistory    StockHistory[]
+  suppliers       Supplier[]
+  purchaseOrders  PurchaseOrder[]
+  expenses        Expense[]
+  campaigns       Campaign[]
+  promotions      Promotion[]
+  offers          Offer[]
+  discounts       Discount[]
+  conversations   Conversation[]
+  reviewsOnStaff  StaffReview[]
+  waitlistEntries BookingWaitlist[]
+  recentlyViewed  RecentlyViewed[]
+  crmTags         CrmTag[]
+  crmSegments     CrmSegment[]
 
   @@index([areaId])
+  @@index([cityId])
   @@index([featured])
   @@index([trending])
   @@index([rating])
+  @@index([premium])
+  @@index([verified])
+}
+
+model SalonCategory {
+  id         String   @id @default(cuid())
+  salonId    String
+  salon      Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([salonId, categoryId])
 }
 
 model SalonImage {
@@ -154,11 +494,318 @@ model SalonImage {
   salonId String
   salon   Salon  @relation(fields: [salonId], references: [id], onDelete: Cascade)
   url     String
-  alt     String
+  alt     String?
   sort    Int    @default(0)
 
   @@index([salonId])
 }
+
+model SalonVideo {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  url       String
+  title     String?
+  thumbnail String?
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([salonId])
+}
+
+model SalonBranch {
+  id          String  @id @default(cuid())
+  salonId     String
+  salon       Salon   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  address     String
+  phone       String
+  email       String?
+  latitude    Float?
+  longitude   Float?
+  areaId      String?
+  area        Area?   @relation(fields: [areaId], references: [id])
+  isMain      Boolean @default(false)
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([salonId])
+}
+
+model SalonPortfolio {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  imageUrl    String
+  category    String?
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([salonId])
+}
+
+model SalonCertificate {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  issuer      String?
+  imageUrl    String?
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([salonId])
+}
+
+model SalonHoliday {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  date      DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([salonId, date])
+}
+
+model SalonSetting {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  key       String
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@unique([salonId, key])
+}
+
+model SalonDocument {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  type      String   // LICENSE, TAX, INSURANCE, CONTRACT
+  name      String
+  url       String
+  verified  Boolean  @default(false)
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([salonId])
+}
+
+model SalonSubscription {
+  id            String   @id @default(cuid())
+  salonId       String   @unique
+  salon         Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  plan          String   @default("FREE") // FREE, BASIC, PRO, ENTERPRISE
+  status        String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELLED, EXPIRED
+  price         Int      @default(0)
+  startAt       DateTime @default(now())
+  renewsAt      DateTime?
+  cancelledAt   DateTime?
+  stripeSubId   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SalonBilling {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  amount      Int
+  description String
+  status      String   @default("PENDING")
+  invoiceUrl  String?
+  dueAt       DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([salonId])
+}
+
+model SalonStatistic {
+  id              String   @id @default(cuid())
+  salonId         String
+  salon           Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  date            DateTime
+  views           Int      @default(0)
+  profileViews    Int      @default(0)
+  bookingRequests Int      @default(0)
+  bookingsCompleted Int    @default(0)
+  bookingsCancelled Int    @default(0)
+  revenue         Int      @default(0)
+  avgRating       Float?
+  createdAt       DateTime @default(now())
+
+  @@unique([salonId, date])
+  @@index([salonId, date])
+}
+
+// ──────────────────────────────────────────────
+// STAFF
+// ──────────────────────────────────────────────
+
+model Staff {
+  id            String   @id @default(cuid())
+  salonId       String
+  salon         Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  name          String
+  title         String
+  bio           String?
+  email         String?
+  phone         String?
+  avatarUrl     String?
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  commissionPct Int      @default(0)
+  hireDate      DateTime?
+  leaveBalance  Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bookings      Booking[]
+  availability  StaffAvailability[]
+  schedule      StaffSchedule[]
+  skills        StaffSkill[]
+  portfolio     StaffPortfolio[]
+  reviews       StaffReview[]
+  leaveRequests    StaffLeave[]
+  performance      StaffPerformance[]
+  attendance       StaffAttendance[]
+  waitlistEntries  BookingWaitlist[]
+
+  @@index([salonId])
+  @@index([userId])
+}
+
+model StaffAvailability {
+  id        String   @id @default(cuid())
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  dayOfWeek Int      // 0=Sunday, 6=Saturday
+  startMin  Int
+  endMin    Int
+  active    Boolean  @default(true)
+
+  @@unique([staffId, dayOfWeek])
+}
+
+model StaffSchedule {
+  id        String   @id @default(cuid())
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date      DateTime
+  startMin  Int
+  endMin    Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([staffId, date])
+  @@index([staffId, date])
+}
+
+model StaffSkill {
+  id        String   @id @default(cuid())
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  serviceId String?
+  service   Service? @relation("ServiceSkills", fields: [serviceId], references: [id])
+  name      String
+
+  @@unique([staffId, name])
+  @@index([serviceId])
+}
+
+model StaffPortfolio {
+  id          String   @id @default(cuid())
+  staffId     String
+  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  imageUrl    String
+  category    String?
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([staffId])
+}
+
+model StaffReview {
+  id        String   @id @default(cuid())
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id])
+  bookingId String?
+  rating    Int
+  text      String?
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+  @@index([userId])
+}
+
+model StaffLeave {
+  id          String      @id @default(cuid())
+  staffId     String
+  staff       Staff       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  reason      String
+  status      LeaveStatus @default(PENDING)
+  approvedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([staffId])
+}
+
+model StaffPerformance {
+  id              String   @id @default(cuid())
+  staffId         String
+  staff           Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  periodStart     DateTime
+  periodEnd       DateTime
+  bookingsCompleted Int    @default(0)
+  totalRevenue    Int      @default(0)
+  avgRating       Float?
+  totalReviews    Int      @default(0)
+  noShows         Int      @default(0)
+  lateMinutes     Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([staffId, periodStart, periodEnd])
+}
+
+model StaffAttendance {
+  id          String   @id @default(cuid())
+  staffId     String
+  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date        DateTime
+  clockIn     DateTime?
+  clockOut    DateTime?
+  status      String   @default("PRESENT") // PRESENT, LATE, ABSENT, HALF_DAY
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@unique([staffId, date])
+  @@index([staffId, date])
+}
+
+// ──────────────────────────────────────────────
+// EMPLOYEE (legacy, for backward compatibility)
+// ──────────────────────────────────────────────
 
 model Employee {
   id       String    @id @default(cuid())
@@ -172,22 +819,95 @@ model Employee {
   @@index([salonId])
 }
 
+// ──────────────────────────────────────────────
+// SERVICES
+// ──────────────────────────────────────────────
+
 model Service {
-  id          String        @id @default(cuid())
-  salonId     String
-  salon       Salon         @relation(fields: [salonId], references: [id], onDelete: Cascade)
-  categoryId  String
-  category    Category      @relation(fields: [categoryId], references: [id])
-  name        String
-  description String?
-  price       Int
-  durationMin Int
-  active      Boolean       @default(true)
-  items       BookingItem[]
+  id              String        @id @default(cuid())
+  salonId         String
+  salon           Salon         @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        Category      @relation(fields: [categoryId], references: [id])
+  serviceCategoryId String?
+  serviceCategory ServiceCategory? @relation(fields: [serviceCategoryId], references: [id])
+  name            String
+  description     String?
+  price           Int
+  discountedPrice Int?
+  durationMin     Int
+  bufferMin       Int           @default(0)
+  active          Boolean       @default(true)
+  sortOrder       Int           @default(0)
+  homeService     Boolean       @default(false)
+  gender          Gender?       @default(UNISEX)
+
+  items           BookingItem[]
+  variants        ServiceVariant[]
+  addons          ServiceAddon[]
+  images          ServiceImage[]
+  discounts       ServiceDiscount[]
+  tags            ServiceTagMapping[]
+  skillMappings   StaffSkill[] @relation("ServiceSkills")
+  waitlistEntries BookingWaitlist[]
 
   @@index([salonId])
   @@index([categoryId])
+  @@index([serviceCategoryId])
 }
+
+model ServiceVariant {
+  id          String  @id @default(cuid())
+  serviceId   String
+  service     Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  name        String  // e.g. "Short", "Medium", "Long"
+  price       Int
+  durationMin Int
+
+  @@index([serviceId])
+}
+
+model ServiceAddon {
+  id          String  @id @default(cuid())
+  serviceId   String
+  service     Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  name        String
+  price       Int
+  durationMin Int
+  active      Boolean @default(true)
+
+  @@index([serviceId])
+}
+
+model ServiceImage {
+  id        String @id @default(cuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  sort      Int    @default(0)
+
+  @@index([serviceId])
+}
+
+model ServiceDiscount {
+  id          String   @id @default(cuid())
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  name        String
+  type        CouponType
+  value       Int
+  startAt     DateTime
+  endAt       DateTime
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([serviceId])
+}
+
+// ──────────────────────────────────────────────
+// WORKING HOURS
+// ──────────────────────────────────────────────
 
 model WorkingHour {
   id        String  @id @default(cuid())
@@ -201,6 +921,10 @@ model WorkingHour {
   @@unique([salonId, dayOfWeek])
 }
 
+// ──────────────────────────────────────────────
+// BOOKINGS (The Heart of the Platform)
+// ──────────────────────────────────────────────
+
 model Booking {
   id            String        @id @default(cuid())
   code          String        @unique
@@ -210,9 +934,12 @@ model Booking {
   salon         Salon         @relation(fields: [salonId], references: [id])
   employeeId    String?
   employee      Employee?     @relation(fields: [employeeId], references: [id])
+  staffId       String?
+  staff         Staff?        @relation(fields: [staffId], references: [id])
   startAt       DateTime
+  endAt         DateTime?
   durationMin   Int
-  status        BookingStatus @default(CONFIRMED)
+  status        BookingStatus @default(PENDING)
   subtotal      Int
   discount      Int           @default(0)
   total         Int
@@ -220,15 +947,30 @@ model Booking {
   couponId      String?
   coupon        Coupon?       @relation(fields: [couponId], references: [id])
   notes         String?
+  internalNotes String?       // Salon-only notes
+  rescheduleCount Int         @default(0)
+  source        String?       // WEBSITE, APP, WALK_IN, STAFF
+  checkInAt     DateTime?
+  checkOutAt    DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  items   BookingItem[]
-  payment Payment?
-  review  Review?
+  items         BookingItem[]
+  payment       Payment?
+  review        Review?
+  reminders     BookingReminder[]
+  statusHistory BookingTracking[]
+  waitlist      BookingWaitlist[]
+  refunds       BookingRefund[]
+  reschedules   BookingReschedule[]
+  loyaltyTxns   LoyaltyTransaction[]
+  walletTxns    WalletTransaction[]
 
   @@index([userId])
   @@index([salonId, startAt])
+  @@index([staffId, startAt])
+  @@index([status])
+  @@index([startAt])
 }
 
 model BookingItem {
@@ -240,9 +982,88 @@ model BookingItem {
   name        String
   price       Int
   durationMin Int
+  staffId     String?
 
   @@index([bookingId])
 }
+
+model BookingReminder {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  channel   NotificationChannel
+  sentAt    DateTime
+  type      String   // CONFIRMATION, REMINDER, FOLLOWUP
+
+  @@index([bookingId])
+}
+
+model BookingTracking {
+  id        String        @id @default(cuid())
+  bookingId String
+  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fromStatus BookingStatus
+  toStatus  BookingStatus
+  changedBy String?       // userId or "SYSTEM"
+  reason    String?
+  createdAt DateTime      @default(now())
+
+  @@index([bookingId])
+}
+
+model BookingWaitlist {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId      String?
+  name        String
+  phone       String
+  serviceId   String?
+  service     Service? @relation(fields: [serviceId], references: [id])
+  staffId     String?
+  staff       Staff?   @relation(fields: [staffId], references: [id])
+  preferredDate DateTime?
+  notes       String?
+  notified    Boolean  @default(false)
+  converted   Boolean  @default(false)
+  bookingId   String?
+  booking     Booking? @relation(fields: [bookingId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([salonId])
+  @@index([bookingId])
+}
+
+model BookingRefund {
+  id          String   @id @default(cuid())
+  bookingId   String
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount      Int
+  reason      String
+  status      String   @default("PENDING") // PENDING, APPROVED, PROCESSED, REJECTED
+  processedBy String?
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+model BookingReschedule {
+  id          String   @id @default(cuid())
+  bookingId   String
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fromDate    DateTime
+  toDate      DateTime
+  reason      String?
+  changedBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+// ──────────────────────────────────────────────
+// PAYMENTS
+// ──────────────────────────────────────────────
 
 model Payment {
   id          String        @id @default(cuid())
@@ -251,10 +1072,86 @@ model Payment {
   method      PaymentMethod
   status      PaymentStatus @default(PENDING)
   amount      Int
-  provider    String?
-  providerRef String?
+  provider    String?       // stripe, jazzcash, easypaisa
+  providerRef String?       // external transaction ID
+  fee         Int?          // processing fee
+  netAmount   Int?          // amount after fees
+  metadata    String?       // JSON
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  attempts    PaymentAttempt[]
+
+  @@index([providerRef])
+}
+
+model PaymentAttempt {
+  id        String        @id @default(cuid())
+  paymentId String
+  payment   Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  method    PaymentMethod
+  status    String        @default("ATTEMPTED") // ATTEMPTED, SUCCESS, FAILED
+  providerRef String?
+  error     String?
+  createdAt DateTime      @default(now())
+
+  @@index([paymentId])
+}
+
+model WalletTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // CREDIT, DEBIT
+  amount    Int
+  balance   Int
+  reason    String   // DEPOSIT, PAYMENT, REFUND, REFERRAL, LOYALTY
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([bookingId])
+}
+
+model GiftCard {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  purchaserId     String
+  purchaser       User     @relation("Purchaser", fields: [purchaserId], references: [id])
+  recipientId     String?
+  recipient       User?    @relation("Recipient", fields: [recipientId], references: [id])
+  recipientEmail  String?
+  recipientName   String?
+  amount          Int
+  balance         Int
+  message         String?
+  isPhysical      Boolean  @default(false)
+  expiresAt       DateTime?
+  redeemedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  transactions    GiftCardTransaction[]
+
+  @@index([purchaserId])
+  @@index([recipientId])
+}
+
+model GiftCardTransaction {
+  id          String   @id @default(cuid())
+  giftCardId  String
+  giftCard    GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  bookingId   String?
+  senderId    String?
+  sender      User?    @relation("Sender", fields: [senderId], references: [id])
+  receiverId  String?
+  receiver    User?    @relation("Receiver", fields: [receiverId], references: [id])
+  amount      Int
+  balanceAfter Int
+  type        String   // PURCHASE, REDEMPTION, TOPUP
+  createdAt   DateTime @default(now())
+
+  @@index([giftCardId])
 }
 
 model Coupon {
@@ -267,10 +1164,92 @@ model Coupon {
   minTotal  Int        @default(0)
   maxUses   Int?
   uses      Int        @default(0)
+  maxPerUser Int?
   expiresAt DateTime?
   active    Boolean    @default(true)
+
   bookings  Booking[]
+  usage     CouponUsage[]
+
+  @@index([salonId])
 }
+
+model CouponUsage {
+  id        String   @id @default(cuid())
+  couponId  String
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId    String
+  usedAt    DateTime @default(now())
+
+  @@unique([couponId, userId])
+  @@index([couponId])
+}
+
+model Membership {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String
+  price       Int
+  durationDays Int
+  perks       String       @default("[]")
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  users       UserMembership[]
+  payments    MembershipPayment[]
+}
+
+model UserMembership {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  startAt      DateTime   @default(now())
+  expiresAt    DateTime
+  autoRenew    Boolean    @default(false)
+  status       String     @default("ACTIVE") // ACTIVE, EXPIRED, CANCELLED
+  createdAt    DateTime   @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model MembershipPayment {
+  id           String   @id @default(cuid())
+  membershipId String
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  userId       String
+  amount       Int
+  provider     String?
+  providerRef  String?
+  status       String   @default("PAID")
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  userId        String?
+  salonId       String?
+  plan          String
+  status        String   @default("ACTIVE")
+  price         Int
+  interval      String   // MONTHLY, YEARLY
+  provider      String?  // stripe, jazzcash
+  providerSubId String?
+  startAt       DateTime @default(now())
+  renewsAt      DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ──────────────────────────────────────────────
+// REVIEWS
+// ──────────────────────────────────────────────
 
 model Review {
   id         String   @id @default(cuid())
@@ -285,9 +1264,63 @@ model Review {
   ownerReply String?
   helpful    Int      @default(0)
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  images      ReviewImage[]
+  reports     ReviewReport[]
+  helpfulVotes ReviewHelpful[]
+  statistics  ReviewStatistic?
 
   @@index([salonId])
+  @@index([userId])
 }
+
+model ReviewImage {
+  id       String @id @default(cuid())
+  reviewId String
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  url      String
+  sort     Int    @default(0)
+
+  @@index([reviewId])
+}
+
+model ReviewReport {
+  id          String   @id @default(cuid())
+  reviewId    String
+  review      Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId      String
+  reason      String
+  description String?
+  resolved    Boolean  @default(false)
+  resolvedBy  String?
+  createdAt   DateTime @default(now())
+
+  @@unique([reviewId, userId])
+}
+
+model ReviewStatistic {
+  id           String @id @default(cuid())
+  reviewId     String @unique
+  review       Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  helpfulCount Int    @default(0)
+  reportCount  Int    @default(0)
+}
+
+model ReviewHelpful {
+  id        String   @id @default(cuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, userId])
+}
+
+// ──────────────────────────────────────────────
+// CUSTOMER
+// ──────────────────────────────────────────────
 
 model Favorite {
   id        String   @id @default(cuid())
@@ -300,26 +1333,1179 @@ model Favorite {
   @@unique([userId, salonId])
 }
 
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String  @default("Home")
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  area       String
+  postalCode String?
+  isDefault  Boolean @default(false)
+  latitude   Float?
+  longitude  Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model BeautyPassport {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalBookings   Int      @default(0)
+  totalSpent      Int      @default(0)
+  favoriteSalonId String?
+  favoriteService String?
+  preferredArea   String?
+  hairType        String?
+  skinType        String?
+  preferredStyle  String?
+  lastVisitAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model BeautyGoal {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String   // Wedding, Eid, Graduation, Photoshoot, Vacation
+  description String?
+  targetDate  DateTime
+  budget      Int?
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  timeline    BeautyTimeline[]
+
+  @@index([userId])
+}
+
+model BeautyTimeline {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId      String?
+  goal        BeautyGoal? @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  date        DateTime
+  type        String   // BOOKING, GOAL_STEP, MILESTONE
+  bookingId   String?
+  completed   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([goalId])
+}
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  query     String
+  filters   String?  // JSON
+  name      String?
+  notify    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SavedStyle {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  title     String?
+  category  String?
+  salonId   String?
+  staffId   String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model RecentlyViewed {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  viewedAt  DateTime @default(now())
+
+  @@unique([userId, salonId])
+  @@index([userId, viewedAt])
+}
+
+model ContinueBooking {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  salonId   String
+  services  String   // JSON array of service IDs
+  staffId   String?
+  date      DateTime?
+  notes     String?
+  step      Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, salonId])
+}
+
+model CustomerStatistic {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalBookings   Int      @default(0)
+  totalSpent      Int      @default(0)
+  avgRating       Float?
+  totalReviews    Int      @default(0)
+  cancellations   Int      @default(0)
+  noShows         Int      @default(0)
+  loyaltyEarned   Int      @default(0)
+  loyaltyRedeemed Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, periodStart, periodEnd])
+}
+
+// ──────────────────────────────────────────────
+// CRM (Salon Customer Relationship Management)
+// ──────────────────────────────────────────────
+
+model CrmCustomer {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId      String
+  totalBookings Int    @default(0)
+  totalSpent  Int      @default(0)
+  lastVisitAt DateTime?
+  notes       CrmNote[]
+  tags        CrmCustomerTag[]
+  birthdays   CrmBirthday[]
+  followups   CrmFollowUp[]
+  history     CrmHistory[]
+  segments    CrmCustomerSegment[]
+
+  @@unique([salonId, userId])
+  @@index([salonId])
+  @@index([userId])
+}
+
+model CrmNote {
+  id          String   @id @default(cuid())
+  crmCustomerId String
+  crmCustomer CrmCustomer @relation(fields: [crmCustomerId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User     @relation("CrmNoteAuthor", fields: [authorId], references: [id])
+  content     String
+  type        String   @default("GENERAL") // GENERAL, PREFERENCE, COMPLAINT, COMPLIMENT
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([crmCustomerId])
+}
+
+model CrmTag {
+  id        String  @id @default(cuid())
+  salonId   String
+  salon     Salon   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name      String
+  color     String? @default("#B06A85")
+
+  customers CrmCustomerTag[]
+
+  @@unique([salonId, name])
+}
+
+model CrmCustomerTag {
+  id        String   @id @default(cuid())
+  crmCustomerId String
+  crmCustomer CrmCustomer @relation(fields: [crmCustomerId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       CrmTag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([crmCustomerId, tagId])
+}
+
+model CrmBirthday {
+  id          String   @id @default(cuid())
+  crmCustomerId String
+  crmCustomer CrmCustomer @relation(fields: [crmCustomerId], references: [id], onDelete: Cascade)
+  date        DateTime
+  year        Int?
+  notes       String?
+  giftSent    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([crmCustomerId])
+}
+
+model CrmFollowUp {
+  id          String   @id @default(cuid())
+  crmCustomerId String
+  crmCustomer CrmCustomer @relation(fields: [crmCustomerId], references: [id], onDelete: Cascade)
+  note        String
+  dueAt       DateTime
+  completedAt DateTime?
+  assignedTo  String?
+  createdAt   DateTime @default(now())
+
+  @@index([crmCustomerId])
+}
+
+model CrmSegment {
+  id        String  @id @default(cuid())
+  salonId   String
+  salon     Salon   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name      String
+  rules     String  // JSON query rules
+  customers CrmCustomerSegment[]
+  campaigns CrmCampaign[]
+
+  @@unique([salonId, name])
+}
+
+model CrmCustomerSegment {
+  id          String     @id @default(cuid())
+  crmCustomerId String
+  crmCustomer CrmCustomer @relation(fields: [crmCustomerId], references: [id], onDelete: Cascade)
+  segmentId   String
+  segment     CrmSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@unique([crmCustomerId, segmentId])
+}
+
+model CrmCampaign {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  segmentId   String?
+  segment     CrmSegment? @relation(fields: [segmentId], references: [id])
+  message     String
+  channel     NotificationChannel
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+
+  @@index([salonId])
+}
+
+model CrmHistory {
+  id          String   @id @default(cuid())
+  crmCustomerId String
+  crmCustomer CrmCustomer @relation(fields: [crmCustomerId], references: [id], onDelete: Cascade)
+  action      String   // BOOKING, REVIEW, VISIT, CALL, MESSAGE
+  description String?
+  bookingId   String?
+  createdAt   DateTime @default(now())
+
+  @@index([crmCustomerId])
+}
+
+// ──────────────────────────────────────────────
+// INVENTORY
+// ──────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  sku         String?
+  barcode     String?
+  category    String?
+  brand       String?
+  unitPrice   Int
+  sellingPrice Int
+  unit        String   // pcs, ml, g, ltr
+  minStock    Int      @default(0)
+  active      Boolean  @default(true)
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  inventory   Inventory[]
+  stockHistory StockHistory[]
+
+  @@unique([salonId, sku])
+  @@index([salonId])
+}
+
+model Inventory {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(0)
+  location  String?  // e.g. "Shelf A3"
+  updatedAt DateTime @updatedAt
+
+  @@unique([salonId, productId])
+  @@index([salonId])
+}
+
+model StockHistory {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  change    Int      // positive = stock in, negative = stock out
+  balanceAfter Int
+  reason    String   // PURCHASE, SALE, ADJUSTMENT, DAMAGE, EXPIRY
+  referenceId String? // booking ID, purchase order ID, etc.
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([salonId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  salonId   String
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([salonId])
+}
+
+model PurchaseOrder {
+  id          String      @id @default(cuid())
+  salonId     String
+  salon       Salon       @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  supplierId  String?
+  supplier    Supplier?   @relation(fields: [supplierId], references: [id])
+  poNumber    String      @unique
+  status      String      @default("DRAFT") // DRAFT, ORDERED, RECEIVED, CANCELLED
+  totalAmount Int
+  notes       String?
+  orderedAt   DateTime?
+  receivedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  category    String   // RENT, SALARY, SUPPLIES, UTILITIES, MARKETING, MAINTENANCE, OTHER
+  amount      Int
+  description String
+  date        DateTime
+  receiptUrl  String?
+  recurring   Boolean  @default(false)
+  interval    String?  // MONTHLY, QUARTERLY, YEARLY
+  createdAt   DateTime @default(now())
+
+  @@index([salonId])
+  @@index([category])
+}
+
+// ──────────────────────────────────────────────
+// MARKETING
+// ──────────────────────────────────────────────
+
+model Campaign {
+  id          String         @id @default(cuid())
+  salonId     String
+  salon       Salon          @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  type        String         // EMAIL, SMS, PUSH, SOCIAL
+  status      CampaignStatus @default(DRAFT)
+  startAt     DateTime?
+  endAt       DateTime?
+  budget      Int?
+  spent       Int            @default(0)
+  targetCount Int            @default(0)
+  sentCount   Int            @default(0)
+  openCount   Int            @default(0)
+  clickCount  Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  emailCampaign EmailCampaign?
+  smsCampaign   SmsCampaign?
+  pushCampaign  PushCampaign?
+
+  @@index([salonId])
+}
+
+model EmailCampaign {
+  id          String   @id @default(cuid())
+  campaignId  String   @unique
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  subject     String
+  body        String
+  senderName  String?
+  replyTo     String?
+  sentCount   Int      @default(0)
+  openCount   Int      @default(0)
+  clickCount  Int      @default(0)
+  bounceCount Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model SmsCampaign {
+  id          String   @id @default(cuid())
+  campaignId  String   @unique
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  message     String
+  senderId    String?
+  sentCount   Int      @default(0)
+  failedCount Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model PushCampaign {
+  id          String   @id @default(cuid())
+  campaignId  String   @unique
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  title       String
+  body        String
+  imageUrl    String?
+  deepLink    String?
+  sentCount   Int      @default(0)
+  openCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model Promotion {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  imageUrl    String?
+  type        String   // PERCENTAGE, FIXED, BUY_GET, FREEBIE
+  value       Int
+  minPurchase Int?
+  startAt     DateTime?
+  endAt       DateTime?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([salonId])
+}
+
+model Offer {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  imageUrl    String?
+  originalPrice Int
+  offerPrice  Int
+  startAt     DateTime?
+  endAt       DateTime?
+  active      Boolean  @default(true)
+  maxRedemptions Int?
+  redeemedCount Int    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([salonId])
+}
+
+model Discount {
+  id          String     @id @default(cuid())
+  salonId     String
+  salon       Salon      @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  type        CouponType
+  value       Int
+  minTotal    Int        @default(0)
+  startAt     DateTime?
+  endAt       DateTime?
+  daysOfWeek  String?    // JSON array [0,1,2,3,4,5,6]
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  @@index([salonId])
+}
+
+model Referral {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  userId    String?
+  salonId   String?
+  rewardPoints Int  @default(100)
+  maxUses   Int?
+  useCount  Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  rewards   ReferralReward[]
+}
+
+model ReferralReward {
+  id          String   @id @default(cuid())
+  referralId  String
+  referral    Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  referrerId  String
+  referrer    User     @relation("Referrer", fields: [referrerId], references: [id])
+  claimantId  String?
+  claimant    User?    @relation("Claimant", fields: [claimantId], references: [id])
+  points      Int
+  status      String   @default("PENDING") // PENDING, AWARDED, EXPIRED
+  createdAt   DateTime @default(now())
+
+  @@index([referralId])
+  @@index([referrerId])
+}
+
+// ──────────────────────────────────────────────
+// NOTIFICATIONS
+// ──────────────────────────────────────────────
+
 model Notification {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   body      String
+  type      String?
+  data      String?  // JSON payload
   read      Boolean  @default(false)
+  channel   NotificationChannel @default(IN_APP)
   createdAt DateTime @default(now())
 
   @@index([userId, read])
+  @@index([createdAt])
 }
+
+model NotificationTemplate {
+  id        String @id @default(cuid())
+  key       String @unique
+  title     String
+  body      String
+  channel   NotificationChannel
+  variables String // JSON array of variable names
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  template  String?
+  channel   NotificationChannel
+  title     String
+  body      String
+  status    String   @default("SENT") // SENT, DELIVERED, FAILED
+  error     String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Email {
+  id         String   @id @default(cuid())
+  to         String
+  subject    String
+  body       String
+  status     String   @default("PENDING") // PENDING, SENT, DELIVERED, BOUNCED, FAILED
+  provider   String?
+  providerId String?
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([to])
+  @@index([status])
+}
+
+model Sms {
+  id         String   @id @default(cuid())
+  to         String
+  message    String
+  status     String   @default("PENDING")
+  provider   String?
+  providerId String?
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([to])
+}
+
+model PushNotification {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  body       String
+  imageUrl   String?
+  deepLink   String?
+  status     String   @default("PENDING")
+  sentAt     DateTime?
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  imageUrl  String?
+  link      String?
+  startAt   DateTime?
+  endAt     DateTime?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// ──────────────────────────────────────────────
+// CHAT
+// ──────────────────────────────────────────────
+
+model Conversation {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  participantId String
+  participant User     @relation("ConversationParticipant", fields: [participantId], references: [id])
+  subject     String?
+  lastMessageAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages    Message[]
+
+  @@unique([salonId, participantId])
+  @@index([salonId])
+  @@index([participantId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User     @relation(fields: [senderId], references: [id])
+  content        String
+  type           String   @default("TEXT") // TEXT, IMAGE, FILE, SYSTEM
+  createdAt      DateTime @default(now())
+
+  attachments    MessageAttachment[]
+  readReceipts   ReadReceipt[]
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url       String
+  type      String   // IMAGE, DOCUMENT, VIDEO
+  name      String?
+  size      Int?
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+}
+
+model ReadReceipt {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  readAt    DateTime @default(now())
+
+  @@unique([messageId, userId])
+}
+
+// ──────────────────────────────────────────────
+// ANALYTICS
+// ──────────────────────────────────────────────
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  salonId   String?
+  salon     Salon?   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  event     String
+  data      String?  // JSON
+  createdAt DateTime @default(now())
+
+  @@index([salonId, event])
+  @@index([event])
+  @@index([createdAt])
+}
+
+model DailyStatistic {
+  id              String   @id @default(cuid())
+  date            DateTime
+  salonId         String?
+  totalViews      Int      @default(0)
+  totalSearches   Int      @default(0)
+  totalBookings   Int      @default(0)
+  completedBookings Int    @default(0)
+  cancelledBookings Int    @default(0)
+  revenue         Int      @default(0)
+  newUsers        Int      @default(0)
+  newSalons       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([date, salonId])
+  @@index([date])
+}
+
+model MonthlyStatistic {
+  id              String   @id @default(cuid())
+  month           DateTime
+  salonId         String?
+  totalViews      Int      @default(0)
+  totalSearches   Int      @default(0)
+  totalBookings   Int      @default(0)
+  completedBookings Int    @default(0)
+  cancelledBookings Int    @default(0)
+  revenue         Int      @default(0)
+  newUsers        Int      @default(0)
+  newSalons       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([month, salonId])
+  @@index([month])
+}
+
+// ──────────────────────────────────────────────
+// LOYALTY
+// ──────────────────────────────────────────────
 
 model LoyaltyTransaction {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   points    Int
-  reason    String
+  reason    String   // BOOKING, REVIEW, REFERRAL, BIRTHDAY, REDEMPTION, EXPIRY
+  type      String   @default("EARN") // EARN, REDEEM, EXPIRE, ADJUST
+  balance   Int?
   bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// AI
+// ──────────────────────────────────────────────
+
+model AIConversation {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  AIConversationMessage[]
+  context   String?           // JSON
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([userId])
+}
+
+model AIConversationMessage {
+  id             String          @id @default(cuid())
+  conversationId String
+  conversation   AIConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String          // USER, ASSISTANT
+  content        String
+  createdAt      DateTime        @default(now())
+
+  @@index([conversationId])
+}
+
+model AIRecommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // SALON, SERVICE, STAFF, PACKAGE
+  entityId    String
+  score       Float
+  reason      String?
+  viewed      Boolean  @default(false)
+  clicked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+}
+
+model AIPreference {
+  id         String  @id @default(cuid())
+  userId     String  @unique
+  preferences String // JSON
+  updatedAt  DateTime @updatedAt
+}
+
+// ──────────────────────────────────────────────
+// CONTENT MANAGEMENT
+// ──────────────────────────────────────────────
+
+model Page {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  content   String
+  metaTitle String?
+  metaDesc  String?
+  published Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  excerpt     String
+  content     String
+  category    String    @default("general")
+  tags        String    @default("[]")
+  coverUrl    String?
+  authorId    String?
+  author      Author?   @relation(fields: [authorId], references: [id])
+  authorName  String    @default("BeautyBook")
+  published   Boolean   @default(false)
+  featured    Boolean   @default(false)
+  readTimeMin Int       @default(5)
+  views       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+  @@index([category])
+  @@index([published, featured])
+}
+
+model Author {
+  id        String     @id @default(cuid())
+  name      String
+  email     String?    @unique
+  bio       String?
+  avatarUrl String?
+  posts     BlogPost[]
+
+  createdAt DateTime   @default(now())
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  url       String
+  type      String   // IMAGE, VIDEO, DOCUMENT
+  alt       String?
+  size      Int?
+  width     Int?
+  height    Int?
+  folder    String?  // e.g. "gallery", "blog", "profiles"
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([folder])
+  @@index([type])
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  title     String?
+  subtitle  String?
+  imageUrl  String
+  link      String?
+  position  String   @default("HOME_TOP") // HOME_TOP, HOME_MID, SIDEBAR
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  startAt   DateTime?
+  endAt     DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position, active])
+}
+
+model Faq {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  category  String   @default("general")
+  sortOrder Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String
+  role      String?
+  avatarUrl String?
+  content   String
+  rating    Int?
+  salonId   String?
+  featured  Boolean  @default(false)
+  sortOrder Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([featured])
+}
+
+// ──────────────────────────────────────────────
+// SUPPORT
+// ──────────────────────────────────────────────
+
+model SupportTicket {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     String
+  description String
+  category    String       @default("GENERAL") // GENERAL, TECHNICAL, BILLING, FEATURE
+  priority    TicketPriority @default(MEDIUM)
+  status      TicketStatus @default(OPEN)
+  assignedTo  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  messages    TicketMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  isStaff   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// ──────────────────────────────────────────────
+// ADMIN / SYSTEM
+// ──────────────────────────────────────────────
+
+model SecurityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // LOGIN, LOGOUT, PASSWORD_CHANGE, PROFILE_UPDATE, TWO_FACTOR_ENABLE, etc.
+  ipAddress String?
+  userAgent String?
+  deviceId  String?
+  metadata  String?  // JSON
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
+}
+
+model UserDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  type       String   // MOBILE, TABLET, DESKTOP
+  os         String?
+  browser    String?
+  ipAddress  String?
+  fcmToken   String?
+  isTrusted  Boolean  @default(false)
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String   // Salon, Booking, User, etc.
+  entityId  String?
+  details   String?  // JSON
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String   // INFO, WARN, ERROR, DEBUG
+  module    String
+  message   String
+  metadata  String?  // JSON
+  createdAt DateTime @default(now())
+
+  @@index([level])
+  @@index([module])
+  @@index([createdAt])
+}
+
+model FeatureFlag {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  enabled   Boolean  @default(false)
+  description String?
+  rules     String?  // JSON for targeting
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  type      String   @default("STRING") // STRING, NUMBER, BOOLEAN, JSON
+  group     String   @default("general")
+  description String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([group])
+}
+
+// ──────────────────────────────────────────────
+// LEGACY / BACKWARD COMPATIBILITY
+// ──────────────────────────────────────────────
+
+model SearchHistory {
+  id        String   @id @default(cuid())
+  userId    String?
+  query     String
+  results   Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SalonPolicy {
+  id              String  @id @default(cuid())
+  salonId         String
+  salon           Salon   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  cancellationMin Int     @default(120)
+  cancellationFee Int     @default(0)
+  refundPolicy    String  @default("Full refund if cancelled 2h before")
+  latePolicy      String  @default("15 min grace period")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([salonId])
+}
+
+model BusinessVerification {
+  id              String   @id @default(cuid())
+  salonId         String
+  salon           Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  cnicNumber      String?
+  cnicFrontUrl    String?
+  cnicBackUrl     String?
+  licenseNumber   String?
+  licenseUrl      String?
+  taxNumber       String?
+  bankName        String?
+  bankAccount     String?
+  jazzcashNumber  String?
+  easypaisaNumber String?
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  rejectionReason String?
+  submittedAt     DateTime @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+
+  @@unique([salonId])
+}
+
+// ──────────────────────────────────────────────
+// REPORTS
+// ──────────────────────────────────────────────
+
+model SalesReport {
+  id          String   @id @default(cuid())
+  salonId     String?
+  periodStart DateTime
+  periodEnd   DateTime
+  totalRevenue Int     @default(0)
+  totalBookings Int    @default(0)
+  avgBookingValue Int  @default(0)
+  revenueByService String? // JSON
+  revenueByStaff String?   // JSON
+  paymentMethodBreakdown String? // JSON
+  createdAt   DateTime @default(now())
+}
+
+model SalonReport {
+  id              String   @id @default(cuid())
+  salonId         String
+  periodStart     DateTime
+  periodEnd       DateTime
+  totalBookings   Int      @default(0)
+  completedBookings Int    @default(0)
+  cancelledBookings Int    @default(0)
+  noShows         Int      @default(0)
+  totalRevenue    Int      @default(0)
+  avgRating       Float?
+  newCustomers    Int      @default(0)
+  returningCustomers Int   @default(0)
+  popularServices String?  // JSON
+  busyHours       String?  // JSON
+  createdAt       DateTime @default(now())
+
+  @@index([salonId, periodStart, periodEnd])
 }

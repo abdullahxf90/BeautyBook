@@ -5,27 +5,43 @@ const footerCols: Array<{ title: string; links: Array<[string, string]> }> = [
     title: "Discover",
     links: [
       ["Explore salons", "/explore"],
-      ["Services", "/explore#services"],
-      ["Offers", "/#offers"],
-      ["The journal", "/#journal"],
+      ["Services", "/services"],
+      ["Offers", "/offers"],
+      ["The journal", "/blog"],
+      ["Beauty tips", "/tips"],
+    ],
+  },
+  {
+    title: "Platform",
+    links: [
+      ["Gift cards", "/gift-cards"],
+      ["Memberships", "/memberships"],
+      ["AI Assistant", "/ai-assistant"],
+      ["Wallet", "/wallet"],
+      ["Notifications", "/notifications"],
+      ["Chat", "/chat"],
+      ["Referrals", "/referrals"],
     ],
   },
   {
     title: "Company",
     links: [
       ["About", "/about"],
-      ["Careers", "/about#careers"],
-      ["Press", "/about#press"],
-      ["Contact", "/about#contact"],
+      ["Careers", "/careers"],
+      ["Contact", "/contact"],
+      ["Support", "/support"],
+      ["Support Tickets", "/support-tickets"],
+      ["Staff", "/staff"],
+      ["Become a partner", "/partner"],
     ],
   },
   {
-    title: "Partners",
+    title: "Legal",
     links: [
-      ["Become a partner", "/partner"],
-      ["Partner login", "/login"],
-      ["Resources", "/partner#resources"],
-      ["Support", "/about#contact"],
+      ["Privacy", "/privacy"],
+      ["Terms", "/terms"],
+      ["Settings", "/settings"],
+      ["Forgot password", "/forgot-password"],
     ],
   },
 ];
@@ -34,7 +50,7 @@ export default function Footer() {
   return (
     <footer style={{ background: "#151313", color: "rgba(250,248,247,.7)" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "clamp(48px,7vh,80px) clamp(24px,5vw,40px) 40px" }}>
-        <div className="bb-footer-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr repeat(3,1fr)", gap: 40 }}>
+        <div className="bb-footer-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr repeat(4,1fr)", gap: 40 }}>
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 26, fontWeight: 600, letterSpacing: ".12em", color: "#FAF8F7" }}>
               BeautyBook

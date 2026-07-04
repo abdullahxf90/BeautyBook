@@ -69,6 +69,11 @@ async function main() {
     update: {},
     create: { email: "ayesha@example.com", name: "Ayesha Khan", passwordHash: password, role: "CUSTOMER", emailVerified: true, loyaltyPoints: 120 },
   });
+  await prisma.user.upsert({
+    where: { email: "zara@example.com" },
+    update: {},
+    create: { email: "zara@example.com", name: "Zara Mahmood", passwordHash: password, role: "CUSTOMER", emailVerified: true, loyaltyPoints: 85 },
+  });
 
   // ---- Salons (featured trio + trending trio from the design, plus more) ----
   type SalonSeed = {
@@ -211,8 +216,30 @@ async function main() {
     await prisma.coupon.upsert({ where: { code: c.code }, update: {}, create: c });
   }
 
+  // ---- Membership plans ----
+  const membershipPlans = [
+    { name: "Glow Starter", slug: "glow-starter", description: "Perfect for occasional visits. Get 5% off every booking and a free birthday facial.", price: 0, durationDays: 365, perks: JSON.stringify(["5% off all services", "Free birthday facial", "Priority booking"]) },
+    { name: "Glow Plus", slug: "glow-plus", description: "For beauty enthusiasts. 10% off, free monthly add-on, and exclusive event invites.", price: 2999, durationDays: 365, perks: JSON.stringify(["10% off all services", "Free monthly add-on (up to Rs 1500)", "Exclusive event invites", "Double loyalty points"]) },
+    { name: "Glow Premium", slug: "glow-premium", description: "The ultimate beauty membership. 20% off, complimentary premium service quarterly, VIP support.", price: 9999, durationDays: 365, perks: JSON.stringify(["20% off all services", "Complimentary premium service every quarter", "VIP support line", "Triple loyalty points", "Free home service delivery"]) },
+  ];
+  for (const mp of membershipPlans) {
+    await prisma.membership.upsert({ where: { slug: mp.slug }, update: {}, create: mp });
+  }
+
+  // ---- Blog posts ----
+  const blogPosts = [
+    { slug: "5-step-skincare-routine", title: "The 5-Step Skincare Ritual for a Lasting Glow", excerpt: "Achieve radiant skin with this simple yet effective daily routine recommended by Pakistan's top dermatologists.", content: "Skincare doesn't have to be complicated.\n\n## Step 1: Cleanse\nStart with a gentle cleanser suited to your skin type.\n\n## Step 2: Tone\nA good toner balances your skin's pH levels.\n\n## Step 3: Treat\nApply serums or treatments targeting your specific concerns.\n\n## Step 4: Moisturize\nLock in hydration with a moisturizer.\n\n## Step 5: Protect\nAlways finish with SPF during the day.", category: "Skincare", tags: JSON.stringify(["skincare", "routine", "glow"]), readTimeMin: 4, published: true, featured: true },
+    { slug: "bridal-beauty-timeline", title: "How to Plan Your Wedding Beauty Timeline", excerpt: "A month-by-month guide to ensure you look your absolute best on your big day.", content: "Planning wedding beauty can be overwhelming.\n\n## 3 Months Before\nStart your skincare routine and book your trial sessions.\n\n## 1 Month Before\nFinalize your look and do a trial run.\n\n## 1 Week Before\nLast touch-ups and relaxation.\n\n## The Big Day\nTrust your artists and enjoy every moment.", category: "Bridal", tags: JSON.stringify(["bridal", "wedding", "beauty"]), readTimeMin: 5, published: true, featured: true },
+    { slug: "choosing-right-salon-hair-type", title: "Choosing the Right Salon for Your Hair Type", excerpt: "From curly to straight, fine to thick — find the perfect salon that understands your hair.", content: "Your hair is unique and deserves expert care.\n\n## Know Your Hair Type\nUnderstanding whether you have straight, wavy, curly, or coily hair is the first step.\n\n## Research Specialists\nLook for salons that specialize in your hair type.\n\n## Read Reviews\nReal reviews from people with similar hair types are invaluable.", category: "Hair", tags: JSON.stringify(["hair", "salon", "tips"]), readTimeMin: 3, published: true, featured: true },
+    { slug: "summer-skincare-tips", title: "Summer Skincare: Keep Your Glow Intact", excerpt: "Beat the heat with these essential summer skincare tips for Pakistani weather.", content: "Summer in Pakistan can be harsh on your skin.\n\n## Stay Hydrated\nDrink plenty of water throughout the day.\n\n## Lightweight Products\nSwap heavy creams for gel-based moisturizers.\n\n## Sunscreen is Non-Negotiable\nUse SPF 50+ and reapply every 3 hours.\n\n## Weekly Treatments\nTreat yourself to a hydrating facial weekly.", category: "Skin Care", tags: JSON.stringify(["summer", "skincare", "glow"]), readTimeMin: 4, published: true },
+    { slug: "nail-art-trends-2026", title: "Nail Art Trends Taking Over 2026", excerpt: "From minimalist designs to bold statements, discover the nail trends everyone's asking for.", content: "Nail art has become a form of self-expression.\n\n## Chrome Nails\nMirror-like finishes are still going strong.\n\n## Micro-French\nA delicate twist on the classic French manicure.\n\n## 3D Elements\nTextured nails with pearls, gems, and charms.\n\n## Earth Tones\nMuted, natural colors for an elegant look.", category: "Nails", tags: JSON.stringify(["nails", "trends", "nail-art"]), readTimeMin: 3, published: true },
+  ];
+  for (const bp of blogPosts) {
+    await prisma.blogPost.upsert({ where: { slug: bp.slug }, update: {}, create: bp });
+  }
+
   console.log("Seed complete.");
-  console.log("Logins — admin@beautybook.pk / owner@beautybook.pk / ayesha@example.com, password: Password123!");
+  console.log("Logins — admin@beautybook.pk / owner@beautybook.pk / ayesha@example.com / zara@example.com, password: Password123!");
 }
 
 main()

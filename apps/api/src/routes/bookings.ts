@@ -209,4 +209,111 @@ router.post("/:id/complete", requireRole("OWNER", "ADMIN"), asyncHandler(async (
   res.json({ booking: updated });
 }));
 
+// ── Booking lifecycle extensions ──
+
+// Check-in
+router.put("/:id/check-in", asyncHandler(async (req, res) => {
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!booking) throw new ApiError(404, "Booking not found");
+  if (booking.status !== "CONFIRMED") throw new ApiError(400, "Booking must be CONFIRMED to check in");
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { status: "ARRIVED", checkInAt: new Date() },
+  });
+  await prisma.bookingTracking.create({
+    data: { bookingId: booking.id, fromStatus: "CONFIRMED", toStatus: "ARRIVED", changedBy: req.user!.id },
+  });
+  res.json({ booking: updated });
+}));
+
+// Check-out
+router.put("/:id/check-out", asyncHandler(async (req, res) => {
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id }, include: { items: true } });
+  if (!booking) throw new ApiError(404, "Booking not found");
+  if (booking.status !== "IN_PROGRESS" && booking.status !== "ARRIVED") throw new ApiError(400, "Booking must be in progress to check out");
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { status: "COMPLETED", checkOutAt: new Date(), endAt: new Date() },
+  });
+  await prisma.bookingTracking.create({
+    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "COMPLETED", changedBy: req.user!.id },
+  });
+  res.json({ booking: updated });
+}));
+
+// Start booking (in progress)
+router.put("/:id/start", asyncHandler(async (req, res) => {
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!booking) throw new ApiError(404, "Booking not found");
+  if (booking.status !== "ARRIVED") throw new ApiError(400, "Customer must be checked in first");
+  const updated = await prisma.booking.update({
+    where: { id: booking.id }, data: { status: "IN_PROGRESS" },
+  });
+  await prisma.bookingTracking.create({
+    data: { bookingId: booking.id, fromStatus: "ARRIVED", toStatus: "IN_PROGRESS", changedBy: req.user!.id },
+  });
+  res.json({ booking: updated });
+}));
+
+// Tracking history
+router.get("/:id/tracking", asyncHandler(async (req, res) => {
+  const tracking = await prisma.bookingTracking.findMany({
+    where: { bookingId: req.params.id }, orderBy: { createdAt: "asc" },
+  });
+  res.json({ tracking });
+}));
+
+// ── Waitlist ──
+
+router.get("/waitlist", asyncHandler(async (req, res) => {
+  const { salonId } = req.query;
+  if (!salonId) throw new ApiError(400, "salonId required");
+  const entries = await prisma.bookingWaitlist.findMany({
+    where: { salonId: salonId as string },
+    orderBy: { createdAt: "desc" },
+    include: { service: { select: { name: true, price: true } }, staff: { select: { name: true } } },
+  });
+  res.json({ entries });
+}));
+
+const waitlistSchema = z.object({
+  salonId: z.string(), name: z.string().min(2), phone: z.string().min(10),
+  serviceId: z.string().optional(), staffId: z.string().optional(),
+  preferredDate: z.string().optional(), notes: z.string().optional(),
+});
+
+router.post("/waitlist", validate(waitlistSchema), asyncHandler(async (req, res) => {
+  const data = getValidated<z.infer<typeof waitlistSchema>>(req);
+  const entry = await prisma.bookingWaitlist.create({
+    data: {
+      salonId: data.salonId, userId: req.user?.id, name: data.name, phone: data.phone,
+      serviceId: data.serviceId, staffId: data.staffId,
+      preferredDate: data.preferredDate ? new Date(data.preferredDate) : undefined,
+      notes: data.notes,
+    },
+  });
+  res.status(201).json({ entry });
+}));
+
+router.put("/waitlist/:id/convert", asyncHandler(async (req, res) => {
+  const entry = await prisma.bookingWaitlist.update({
+    where: { id: req.params.id }, data: { converted: true, notified: true },
+  });
+  res.json({ entry });
+}));
+
+router.delete("/waitlist/:id", asyncHandler(async (req, res) => {
+  await prisma.bookingWaitlist.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+}));
+
+// ── Reschedule history ──
+
+router.get("/:id/reschedules", asyncHandler(async (req, res) => {
+  const reschedules = await prisma.bookingReschedule.findMany({
+    where: { bookingId: req.params.id }, orderBy: { createdAt: "desc" },
+  });
+  res.json({ reschedules });
+}));
+
 export default router;

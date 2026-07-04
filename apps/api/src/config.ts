@@ -5,4 +5,11 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:3000",
   accessTokenTtl: "15m",
   refreshTokenTtlDays: 30,
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
+  jazzcashMerchantId: process.env.JAZZCASH_MERCHANT_ID || "",
+  jazzcashPassword: process.env.JAZZCASH_PASSWORD || "",
+  easypaisaMerchantId: process.env.EASYPAISA_MERCHANT_ID || "",
+  easypaisaEndpoint: process.env.EASYPAISA_ENDPOINT || "",
+  apiBaseUrl: process.env.API_BASE_URL || "http://localhost:4000",
 };

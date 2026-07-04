@@ -75,3 +75,35 @@ a { color: inherit; }
   .bb-two-col { grid-template-columns: 1fr !important; }
   .bb-footer-grid { grid-template-columns: 1fr 1fr !important; }
 }
+
+@media (max-width: 640px) {
+  .bb-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  .bb-footer-grid { grid-template-columns: 1fr !important; }
+}
+
+/* Loading skeleton animation */
+@keyframes bbShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.bb-skeleton {
+  background: linear-gradient(90deg, #f0e4e8 25%, #e8d6dc 50%, #f0e4e8 75%);
+  background-size: 200% 100%;
+  animation: bbShimmer 1.5s ease-in-out infinite;
+  border-radius: 12px;
+}
+
+/* Offline indicator */
+.bb-offline {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #a33;
+  color: #fff;
+  text-align: center;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 100;
+}

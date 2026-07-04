@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
+import OfflineDetector from "@/components/OfflineDetector";
 
 export const metadata: Metadata = {
   title: "BeautyBook — Find Pakistan's Best Beauty Professionals",
@@ -26,7 +27,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <OfflineDetector />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
