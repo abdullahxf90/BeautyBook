@@ -3,10 +3,7 @@
   "builds": [
     {
       "src": "apps/website/package.json",
-      "use": "@vercel/next",
-      "config": {
-        "rootDirectory": "apps/website"
-      }
+      "use": "@vercel/next"
     },
     {
       "src": "apps/api/src/index.ts",
