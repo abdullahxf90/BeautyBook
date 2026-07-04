@@ -316,4 +316,289 @@ router.get("/:id/reschedules", asyncHandler(async (req, res) => {
   res.json({ reschedules });
 }));
 
+// ── Slot Locking ──
+
+const lockSlotSchema = z.object({
+  salonId: z.string(),
+  staffId: z.string().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startMin: z.number().int().min(0).max(1439),
+  durationMin: z.number().int().min(5).max(1440),
+  sessionId: z.string(),
+});
+
+router.post("/slots/lock", validate(lockSlotSchema), asyncHandler(async (req, res) => {
+  const data = getValidated<z.infer<typeof lockSlotSchema>>(req);
+
+  const dayStart = new Date(`${data.date}T00:00:00`);
+  const dayEnd = new Date(`${data.date}T23:59:59`);
+  const slotStart = new Date(dayStart.getTime() + data.startMin * 60000);
+  const slotEndMin = data.startMin + data.durationMin;
+
+  const [existingLocks, overlapping] = await Promise.all([
+    prisma.slotLock.findMany({
+      where: {
+        salonId: data.salonId,
+        date: { gte: dayStart, lte: dayEnd },
+        expiresAt: { gt: new Date() },
+      },
+    }),
+    prisma.booking.findMany({
+      where: {
+        salonId: data.salonId,
+        status: { notIn: ["CANCELLED", "NO_SHOW"] },
+        startAt: { gte: dayStart, lte: dayEnd },
+      },
+    }),
+  ]);
+
+  const relevantLocks = existingLocks.filter((l) =>
+    !data.staffId || l.staffId === null || l.staffId === data.staffId,
+  );
+
+  for (const lock of relevantLocks) {
+    if (lock.startMin < slotEndMin && data.startMin < lock.startMin + lock.durationMin) {
+      throw new ApiError(409, "This slot is already locked by another session");
+    }
+  }
+
+  const relevantBookings = overlapping.filter((b) => {
+    if (!data.staffId) return true;
+    const bStaffId = b.staffId ?? b.employeeId ?? null;
+    return bStaffId === null || bStaffId === data.staffId;
+  });
+
+  for (const b of relevantBookings) {
+    const bStartMin = b.startAt.getHours() * 60 + b.startAt.getMinutes();
+    if (bStartMin < slotEndMin && data.startMin < bStartMin + b.durationMin) {
+      throw new ApiError(409, "This time slot is already booked");
+    }
+  }
+
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  const lock = await prisma.slotLock.create({
+    data: {
+      salonId: data.salonId,
+      staffId: data.staffId,
+      date: slotStart,
+      startMin: data.startMin,
+      durationMin: data.durationMin,
+      sessionId: data.sessionId,
+      userId: req.user!.id,
+      expiresAt,
+    },
+  });
+
+  res.status(201).json({ lockId: lock.id, expiresAt });
+}));
+
+const renewLockSchema = z.object({
+  lockId: z.string(),
+});
+
+router.post("/slots/renew", validate(renewLockSchema), asyncHandler(async (req, res) => {
+  const { lockId } = getValidated<z.infer<typeof renewLockSchema>>(req);
+
+  const lock = await prisma.slotLock.findUnique({ where: { id: lockId } });
+  if (!lock) throw new ApiError(404, "Lock not found");
+  if (lock.expiresAt < new Date()) throw new ApiError(400, "Lock has already expired");
+
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  await prisma.slotLock.update({ where: { id: lockId }, data: { expiresAt } });
+
+  res.json({ expiresAt });
+}));
+
+const releaseLockSchema = z.object({
+  lockId: z.string(),
+});
+
+router.post("/slots/release", validate(releaseLockSchema), asyncHandler(async (req, res) => {
+  const { lockId } = getValidated<z.infer<typeof releaseLockSchema>>(req);
+  await prisma.slotLock.delete({ where: { id: lockId } });
+  res.json({ ok: true });
+}));
+
+const availableSlotsSchema = z.object({
+  salonId: z.string(),
+  staffId: z.string().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  serviceIds: z.string().optional(),
+  durationMin: z.coerce.number().int().min(5).optional(),
+});
+
+router.get("/slots/available", validate(availableSlotsSchema, "query"), asyncHandler(async (req, res) => {
+  const data = getValidated<z.infer<typeof availableSlotsSchema>>(req);
+
+  let totalDuration = data.durationMin;
+  if (data.serviceIds) {
+    const ids = data.serviceIds.split(",").filter(Boolean);
+    const services = await prisma.service.findMany({
+      where: { id: { in: ids }, salonId: data.salonId, active: true },
+    });
+    totalDuration = services.reduce((s, x) => s + x.durationMin, 0);
+  }
+  if (!totalDuration) throw new ApiError(400, "Either serviceIds or durationMin is required");
+
+  const dateObj = new Date(`${data.date}T00:00:00`);
+  const dayOfWeek = dateObj.getDay();
+  const dayStart = dateObj;
+  const dayEnd = new Date(`${data.date}T23:59:59`);
+
+  const workingHour = await prisma.workingHour.findUnique({
+    where: { salonId_dayOfWeek: { salonId: data.salonId, dayOfWeek } },
+  });
+
+  if (!workingHour || workingHour.closed) {
+    return res.json({ slots: [], date: data.date, staffId: data.staffId, totalDuration });
+  }
+
+  const [allStaff, bookings, locks] = await Promise.all([
+    prisma.staff.findMany({ where: { salonId: data.salonId, active: true }, select: { id: true } }),
+    prisma.booking.findMany({
+      where: {
+        salonId: data.salonId,
+        status: { notIn: ["CANCELLED", "NO_SHOW"] },
+        startAt: { gte: dayStart, lte: dayEnd },
+      },
+      select: {
+        startAt: true, durationMin: true, employeeId: true, staffId: true,
+        staffAssignments: { select: { staffId: true } },
+      },
+    }),
+    prisma.slotLock.findMany({
+      where: {
+        salonId: data.salonId,
+        date: { gte: dayStart, lte: dayEnd },
+        expiresAt: { gt: new Date() },
+      },
+      select: { startMin: true, durationMin: true, staffId: true, userId: true, expiresAt: true },
+    }),
+  ]);
+
+  const userLocks = locks.filter((l) => l.userId === req.user!.id);
+  const lockMap = new Map<string, Date>();
+  for (const l of userLocks) {
+    const key = `${l.startMin}-${l.durationMin}-${l.staffId ?? ""}`;
+    lockMap.set(key, l.expiresAt);
+  }
+
+  const interval = 15;
+  const slots: Array<{
+    startMin: number; startTime: string; endTime: string;
+    available: boolean; status: string; staffAvailable: number; lockExpiresAt?: string;
+  }> = [];
+
+  for (let m = workingHour.openMin; m + totalDuration <= workingHour.closeMin; m += interval) {
+    const endM = m + totalDuration;
+
+    const overlappingBookings = bookings.filter((b) => {
+      const bStartMin = b.startAt.getHours() * 60 + b.startAt.getMinutes();
+      return bStartMin < endM && m < bStartMin + b.durationMin;
+    });
+
+    const overlappingLocks = locks.filter((l) => l.startMin < endM && m < l.startMin + l.durationMin);
+
+    let staffAvailable: number;
+    let available: boolean;
+
+    if (data.staffId) {
+      const busy = overlappingBookings.some((b) => {
+        if (b.employeeId === data.staffId || b.staffId === data.staffId) return true;
+        if (b.staffAssignments.some((a) => a.staffId === data.staffId)) return true;
+        return false;
+      }) || overlappingLocks.some((l) => l.staffId === data.staffId);
+      staffAvailable = busy ? 0 : 1;
+      available = staffAvailable > 0;
+    } else {
+      const busyStaffIds = new Set<string>();
+      for (const b of overlappingBookings) {
+        const bookingStaffIds = new Set<string>();
+        if (b.employeeId) bookingStaffIds.add(b.employeeId);
+        if (b.staffId) bookingStaffIds.add(b.staffId);
+        for (const a of b.staffAssignments) bookingStaffIds.add(a.staffId);
+        if (bookingStaffIds.size === 0) {
+          busyStaffIds.clear();
+          busyStaffIds.add("*ALL*");
+          break;
+        }
+        for (const id of bookingStaffIds) busyStaffIds.add(id);
+      }
+      for (const l of overlappingLocks) {
+        if (l.staffId) busyStaffIds.add(l.staffId);
+        else { busyStaffIds.clear(); busyStaffIds.add("*ALL*"); break; }
+      }
+      const allLocked = busyStaffIds.has("*ALL*");
+      staffAvailable = allLocked ? 0 : allStaff.length - busyStaffIds.size;
+      available = !allLocked && staffAvailable > 0;
+    }
+
+    const isPeak = (m >= 600 && m < 720) || (m >= 960 && m < 1140);
+    let status: string;
+    if (!available) status = "FULL";
+    else if (staffAvailable === 1 && !data.staffId) status = "ONLY_ONE";
+    else if (isPeak) status = "POPULAR";
+    else status = "AVAILABLE";
+
+    const lockKey = `${m}-${totalDuration}-${data.staffId ?? ""}`;
+    const lockExpiresAt = lockMap.get(lockKey);
+
+    const hh = Math.floor(m / 60).toString().padStart(2, "0");
+    const mm = (m % 60).toString().padStart(2, "0");
+    const endHh = Math.floor(endM / 60).toString().padStart(2, "0");
+    const endMm = (endM % 60).toString().padStart(2, "0");
+
+    slots.push({
+      startMin: m,
+      startTime: `${hh}:${mm}`,
+      endTime: `${endHh}:${endMm}`,
+      available,
+      status,
+      staffAvailable: Math.max(0, staffAvailable),
+      ...(lockExpiresAt ? { lockExpiresAt: lockExpiresAt.toISOString() } : {}),
+    });
+  }
+
+  res.json({ slots, date: data.date, staffId: data.staffId, totalDuration });
+}));
+
+// ── Multi-Staff Booking Support ──
+
+const assignStaffSchema = z.object({
+  staffIds: z.array(z.string()).min(1),
+});
+
+router.put("/:id/staff", validate(assignStaffSchema), asyncHandler(async (req, res) => {
+  const { staffIds } = getValidated<z.infer<typeof assignStaffSchema>>(req);
+
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!booking) throw new ApiError(404, "Booking not found");
+
+  await prisma.bookingStaff.deleteMany({ where: { bookingId: booking.id } });
+
+  await prisma.bookingStaff.createMany({
+    data: staffIds.map((staffId, i) => ({
+      bookingId: booking.id,
+      staffId,
+      role: i === 0 ? "PRIMARY" : "ASSISTANT",
+    })),
+  });
+
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: { employeeId: staffIds[0] },
+  });
+
+  const updated = await prisma.booking.findUnique({
+    where: { id: booking.id },
+    include: {
+      ...bookingInclude,
+      staffAssignments: { include: { staff: { select: { name: true, title: true } } } },
+    },
+  });
+
+  res.json({ booking: updated });
+}));
+
 export default router;

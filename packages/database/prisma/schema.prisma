@@ -677,9 +677,10 @@ model Staff {
   skills        StaffSkill[]
   portfolio     StaffPortfolio[]
   reviews       StaffReview[]
-  leaveRequests    StaffLeave[]
-  performance      StaffPerformance[]
-  attendance       StaffAttendance[]
+  leaveRequests StaffLeave[]
+  performance   StaffPerformance[]
+  attendance    StaffAttendance[]
+  bookingAssignments BookingStaff[]
   waitlistEntries  BookingWaitlist[]
 
   @@index([salonId])
@@ -922,6 +923,27 @@ model WorkingHour {
 }
 
 // ──────────────────────────────────────────────
+// SLOT LOCKING
+// ──────────────────────────────────────────────
+
+model SlotLock {
+  id        String   @id @default(cuid())
+  salonId   String
+  staffId   String?
+  date      DateTime
+  startMin  Int
+  durationMin Int
+  sessionId String   // client session identifier
+  userId    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([salonId, staffId, date])
+  @@index([sessionId])
+  @@index([expiresAt])
+}
+
+// ──────────────────────────────────────────────
 // BOOKINGS (The Heart of the Platform)
 // ──────────────────────────────────────────────
 
@@ -956,6 +978,7 @@ model Booking {
   updatedAt     DateTime      @updatedAt
 
   items         BookingItem[]
+  staffAssignments BookingStaff[]
   payment       Payment?
   review        Review?
   reminders     BookingReminder[]
@@ -996,6 +1019,18 @@ model BookingReminder {
   type      String   // CONFIRMATION, REMINDER, FOLLOWUP
 
   @@index([bookingId])
+}
+
+model BookingStaff {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  role      String?  // PRIMARY, ASSISTANT, etc.
+
+  @@unique([bookingId, staffId])
+  @@index([staffId])
 }
 
 model BookingTracking {

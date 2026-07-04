@@ -38,6 +38,9 @@ import referralRoutes from "./routes/referrals";
 import permissionRoutes from "./routes/permissions";
 import beautyRoutes from "./routes/beauty";
 import paymentRoutes from "./routes/payments";
+import insightRoutes from "./routes/insights";
+import automationRoutes from "./routes/automation";
+import reportRoutes from "./routes/reports";
 
 const app = express();
 
@@ -84,6 +87,9 @@ app.use("/api/referrals", referralRoutes);
 app.use("/api/permissions", permissionRoutes);
 app.use("/api/beauty", beautyRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/insights", insightRoutes);
+app.use("/api/automation", automationRoutes);
+app.use("/api/reports", reportRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 app.use(errorHandler);
