@@ -1,0 +1,17 @@
+{
+  "name": "beautybook",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @beautybook/api",
+    "dev:web": "npm run dev -w @beautybook/website",
+    "build": "npm run build -w @beautybook/database && npm run build -w @beautybook/api && npm run build -w @beautybook/website",
+    "db:generate": "npm run generate -w @beautybook/database",
+    "db:migrate": "npm run migrate -w @beautybook/database",
+    "db:seed": "npm run seed -w @beautybook/database"
+  }
+}

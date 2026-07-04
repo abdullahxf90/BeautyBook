@@ -1,0 +1,212 @@
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "@beautybook/database";
+import { ApiError, asyncHandler } from "../utils/http";
+import { requireAuth, requireRole } from "../middleware/auth";
+import { getValidated, validate } from "../middleware/validate";
+
+const router = Router();
+
+router.use(requireAuth);
+
+const bookingInclude = {
+  salon: { select: { name: true, slug: true, address: true, phone: true, area: { include: { city: true } } } },
+  employee: { select: { name: true, title: true } },
+  items: true,
+  payment: true,
+  review: { select: { id: true } },
+} as const;
+
+const createSchema = z.object({
+  salonSlug: z.string(),
+  serviceIds: z.array(z.string()).min(1),
+  employeeId: z.string().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+  paymentMethod: z.enum(["CASH", "CARD", "JAZZCASH", "EASYPAISA"]).default("CASH"),
+  couponCode: z.string().optional(),
+  notes: z.string().max(500).optional(),
+});
+
+router.post("/", validate(createSchema), asyncHandler(async (req, res) => {
+  const data = getValidated<z.infer<typeof createSchema>>(req);
+
+  const salon = await prisma.salon.findUnique({
+    where: { slug: data.salonSlug },
+    include: { workingHours: true },
+  });
+  if (!salon) throw new ApiError(404, "Salon not found");
+
+  const services = await prisma.service.findMany({
+    where: { id: { in: data.serviceIds }, salonId: salon.id, active: true },
+  });
+  if (services.length !== data.serviceIds.length) {
+    throw new ApiError(400, "One or more services are not available at this salon");
+  }
+  if (data.employeeId) {
+    const emp = await prisma.employee.findFirst({ where: { id: data.employeeId, salonId: salon.id, active: true } });
+    if (!emp) throw new ApiError(400, "Selected specialist is not available at this salon");
+  }
+
+  const durationMin = services.reduce((s, x) => s + x.durationMin, 0);
+  const subtotal = services.reduce((s, x) => s + x.price, 0);
+
+  const [hh, mm] = data.time.split(":").map(Number);
+  const startAt = new Date(`${data.date}T00:00:00`);
+  startAt.setHours(hh, mm, 0, 0);
+  if (startAt <= new Date()) throw new ApiError(400, "Cannot book a time in the past");
+
+  const hours = salon.workingHours.find((h) => h.dayOfWeek === startAt.getDay());
+  const startMin = hh * 60 + mm;
+  if (!hours || hours.closed || startMin < hours.openMin || startMin + durationMin > hours.closeMin) {
+    throw new ApiError(400, "The salon is closed at the selected time");
+  }
+
+  const endAt = new Date(startAt.getTime() + durationMin * 60000);
+  const clash = await prisma.booking.findFirst({
+    where: {
+      salonId: salon.id,
+      status: { in: ["PENDING", "CONFIRMED"] },
+      ...(data.employeeId ? { employeeId: data.employeeId } : {}),
+      startAt: { lt: endAt, gte: new Date(startAt.getTime() - 8 * 3600 * 1000) },
+    },
+    orderBy: { startAt: "asc" },
+  });
+  if (clash) {
+    const clashEnd = new Date(clash.startAt.getTime() + clash.durationMin * 60000);
+    if (startAt < clashEnd && endAt > clash.startAt) {
+      throw new ApiError(409, "That time slot was just taken — please pick another");
+    }
+  }
+
+  let discount = 0;
+  let couponId: string | undefined;
+  if (data.couponCode) {
+    const coupon = await prisma.coupon.findUnique({ where: { code: data.couponCode.toUpperCase() } });
+    if (!coupon || !coupon.active) throw new ApiError(400, "Invalid coupon code");
+    if (coupon.expiresAt && coupon.expiresAt < new Date()) throw new ApiError(400, "This coupon has expired");
+    if (coupon.maxUses && coupon.uses >= coupon.maxUses) throw new ApiError(400, "This coupon has been fully redeemed");
+    if (coupon.salonId && coupon.salonId !== salon.id) throw new ApiError(400, "This coupon is not valid at this salon");
+    if (subtotal < coupon.minTotal) throw new ApiError(400, `This coupon requires a minimum spend of Rs ${coupon.minTotal}`);
+    discount = coupon.type === "PERCENT" ? Math.round((subtotal * coupon.value) / 100) : coupon.value;
+    discount = Math.min(discount, subtotal);
+    couponId = coupon.id;
+    await prisma.coupon.update({ where: { id: coupon.id }, data: { uses: { increment: 1 } } });
+  }
+
+  const total = subtotal - discount;
+  const code = `BB-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 90 + 10)}`;
+
+  const booking = await prisma.booking.create({
+    data: {
+      code,
+      userId: req.user!.id,
+      salonId: salon.id,
+      employeeId: data.employeeId,
+      startAt,
+      durationMin,
+      subtotal,
+      discount,
+      total,
+      paymentMethod: data.paymentMethod,
+      couponId,
+      notes: data.notes,
+      status: salon.instantBooking ? "CONFIRMED" : "PENDING",
+      items: {
+        create: services.map((s) => ({ serviceId: s.id, name: s.name, price: s.price, durationMin: s.durationMin })),
+      },
+      payment: {
+        create: { method: data.paymentMethod, amount: total, status: data.paymentMethod === "CASH" ? "PENDING" : "PENDING" },
+      },
+    },
+    include: bookingInclude,
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: req.user!.id,
+      title: "Booking confirmed",
+      body: `${salon.name} on ${startAt.toDateString()} at ${data.time}. Code ${code}.`,
+    },
+  });
+
+  res.status(201).json({ booking });
+}));
+
+router.get("/mine", asyncHandler(async (req, res) => {
+  const bookings = await prisma.booking.findMany({
+    where: { userId: req.user!.id },
+    orderBy: { startAt: "desc" },
+    include: bookingInclude,
+  });
+  res.json({ bookings });
+}));
+
+router.post("/:id/cancel", asyncHandler(async (req, res) => {
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!booking || booking.userId !== req.user!.id) throw new ApiError(404, "Booking not found");
+  if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {
+    throw new ApiError(400, "Only upcoming bookings can be cancelled");
+  }
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      status: "CANCELLED",
+      payment: { update: { status: booking.paymentMethod === "CASH" ? "FAILED" : "REFUNDED" } },
+    },
+    include: bookingInclude,
+  });
+  await prisma.notification.create({
+    data: { userId: req.user!.id, title: "Booking cancelled", body: `Booking ${booking.code} has been cancelled.` },
+  });
+  res.json({ booking: updated });
+}));
+
+const rescheduleSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+router.post("/:id/reschedule", validate(rescheduleSchema), asyncHandler(async (req, res) => {
+  const { date, time } = getValidated<z.infer<typeof rescheduleSchema>>(req);
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!booking || booking.userId !== req.user!.id) throw new ApiError(404, "Booking not found");
+  if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {
+    throw new ApiError(400, "Only upcoming bookings can be rescheduled");
+  }
+  const [hh, mm] = time.split(":").map(Number);
+  const startAt = new Date(`${date}T00:00:00`);
+  startAt.setHours(hh, mm, 0, 0);
+  if (startAt <= new Date()) throw new ApiError(400, "Cannot reschedule to a time in the past");
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { startAt },
+    include: bookingInclude,
+  });
+  res.json({ booking: updated });
+}));
+
+// Owner/admin marks a booking completed; awards loyalty points.
+router.post("/:id/complete", requireRole("OWNER", "ADMIN"), asyncHandler(async (req, res) => {
+  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  if (!booking) throw new ApiError(404, "Booking not found");
+  if (booking.status !== "CONFIRMED" && booking.status !== "PENDING") {
+    throw new ApiError(400, "Booking cannot be completed from its current status");
+  }
+  const points = Math.floor(booking.total / 100);
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { status: "COMPLETED", payment: { update: { status: "PAID" } } },
+    include: bookingInclude,
+  });
+  await prisma.user.update({ where: { id: booking.userId }, data: { loyaltyPoints: { increment: points } } });
+  await prisma.loyaltyTransaction.create({
+    data: { userId: booking.userId, points, reason: "Completed booking", bookingId: booking.id },
+  });
+  await prisma.notification.create({
+    data: { userId: booking.userId, title: "Thanks for visiting!", body: `You earned ${points} loyalty points. Leave a review to help others glow.` },
+  });
+  res.json({ booking: updated });
+}));
+
+export default router;
