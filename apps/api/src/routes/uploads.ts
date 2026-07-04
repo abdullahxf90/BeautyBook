@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
 import { prisma } from "@beautybook/database";
-import { authenticate } from "../middleware/auth";
+import { requireAuth } from "../middleware/auth";
 import { uploadSingle, uploadMultiple, uploadDocument } from "../middleware/upload";
 import { uploadFile, deleteFile, pathFromUrl, BUCKETS } from "../lib/storage";
 import { ApiError, asyncHandler } from "../utils/http";
@@ -24,7 +24,7 @@ function ext(mimetype: string) {
 // PUT /api/uploads/avatar
 router.put(
   "/avatar",
-  authenticate,
+  requireAuth,
   uploadSingle("avatar"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(400, "No file provided");
@@ -47,7 +47,7 @@ router.put(
 // DELETE /api/uploads/avatar
 router.delete(
   "/avatar",
-  authenticate,
+  requireAuth,
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { avatarUrl: true } });
     if (user?.avatarUrl?.includes("supabase.co")) {
@@ -62,7 +62,7 @@ router.delete(
 // POST /api/uploads/salon/:salonId/images  (up to 10 images)
 router.post(
   "/salon/:salonId/images",
-  authenticate,
+  requireAuth,
   uploadMultiple("images", 10),
   asyncHandler(async (req, res) => {
     const files = req.files as Express.Multer.File[];
@@ -86,7 +86,7 @@ router.post(
 // DELETE /api/uploads/salon/:salonId/images/:imageId
 router.delete(
   "/salon/:salonId/images/:imageId",
-  authenticate,
+  requireAuth,
   asyncHandler(async (req, res) => {
     const salon = await prisma.salon.findUnique({ where: { id: req.params.salonId }, select: { ownerId: true } });
     if (!salon) throw new ApiError(404, "Salon not found");
@@ -106,7 +106,7 @@ router.delete(
 // PUT /api/uploads/salon/:salonId/logo
 router.put(
   "/salon/:salonId/logo",
-  authenticate,
+  requireAuth,
   uploadSingle("logo"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(400, "No file provided");
@@ -124,7 +124,7 @@ router.put(
 // PUT /api/uploads/employee/:employeeId/photo
 router.put(
   "/employee/:employeeId/photo",
-  authenticate,
+  requireAuth,
   uploadSingle("photo"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(400, "No file provided");
@@ -138,7 +138,7 @@ router.put(
 // POST /api/uploads/review/:reviewId/media  (up to 5 images)
 router.post(
   "/review/:reviewId/media",
-  authenticate,
+  requireAuth,
   uploadMultiple("media", 5),
   asyncHandler(async (req, res) => {
     const files = req.files as Express.Multer.File[];
@@ -162,7 +162,7 @@ router.post(
 // PUT /api/uploads/coupon/:couponId/banner
 router.put(
   "/coupon/:couponId/banner",
-  authenticate,
+  requireAuth,
   uploadSingle("banner"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(400, "No file provided");
@@ -177,7 +177,7 @@ router.put(
 // PUT /api/uploads/category/:categoryId/icon  (admin only)
 router.put(
   "/category/:categoryId/icon",
-  authenticate,
+  requireAuth,
   uploadSingle("icon"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(400, "No file provided");
@@ -192,7 +192,7 @@ router.put(
 // POST /api/uploads/documents  (salon verification docs etc.)
 router.post(
   "/documents",
-  authenticate,
+  requireAuth,
   uploadDocument("document"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new ApiError(400, "No file provided");
