@@ -6,12 +6,17 @@
     "apps/*",
     "packages/*"
   ],
+  "prisma": {
+    "schema": "packages/database/prisma/schema.prisma"
+  },
   "scripts": {
     "dev:api": "npm run dev -w @beautybook/api",
     "dev:web": "npm run dev -w @beautybook/website",
     "build": "npm run build -w @beautybook/database && npm run build -w @beautybook/api && npm run build -w @beautybook/website",
     "db:generate": "npm run generate -w @beautybook/database",
     "db:migrate": "npm run migrate -w @beautybook/database",
-    "db:seed": "npm run seed -w @beautybook/database"
+    "db:seed": "npm run seed -w @beautybook/database",
+    "postinstall": "prisma generate --schema=packages/database/prisma/schema.prisma"
   }
 }
+
