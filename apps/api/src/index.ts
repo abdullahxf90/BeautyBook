@@ -12,6 +12,7 @@ import reviewRoutes from "./routes/reviews";
 import favoriteRoutes from "./routes/favorites";
 import couponRoutes from "./routes/coupons";
 import notificationRoutes from "./routes/notifications";
+import uploadRoutes from "./routes/uploads";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/uploads", uploadRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 app.use(errorHandler);
