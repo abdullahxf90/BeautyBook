@@ -48,6 +48,7 @@ import compareRoutes from "./routes/compare";
 import loyaltyRoutes from "./routes/loyalty";
 import discoveryRoutes from "./routes/discovery";
 import infraRoutes from "./routes/infra";
+import legalRoutes from "./routes/legal";
 
 const app = express();
 
@@ -106,6 +107,7 @@ app.use("/api/compare", compareRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/discovery", discoveryRoutes);
 app.use("/api/infra", infraRoutes);
+app.use("/api/legal", legalRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 app.use(errorHandler);

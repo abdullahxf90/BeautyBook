@@ -22,6 +22,8 @@ import cohortRoutes from "./cohorts";
 import reportRoutes from "./reports";
 import funnelRoutes from "./funnels";
 import realtimeRoutes from "./realtime";
+import predictionRoutes from "./predictions";
+import executiveRoutes from "./executive";
 
 const router = Router();
 router.use(requireAuth);
@@ -34,6 +36,8 @@ router.use("/cohorts", cohortRoutes);
 router.use("/reports", reportRoutes);
 router.use("/funnels", funnelRoutes);
 router.use("/realtime", realtimeRoutes);
+router.use("/predictions", predictionRoutes);
+router.use("/executive", executiveRoutes);
 
 // ── Customer Analytics ──────────────────────────
 

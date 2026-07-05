@@ -100,4 +100,47 @@ router.get("/queue", requireAuth, requireRole("ADMIN", "SUPER_ADMIN"), asyncHand
   res.json({ enabled: true, queues: { pending, delayed, dead } });
 }));
 
+// Public service status page (aggregated, no internals exposed)
+router.get("/status", asyncHandler(async (_req, res) => {
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  let database = "operational";
+  let recentErrors = 0;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    recentErrors = await prisma.systemLog.count({ where: { level: "ERROR", createdAt: { gte: hourAgo } } });
+  } catch {
+    database = "outage";
+  }
+  let cache = "operational";
+  try {
+    const redis = await getRedis();
+    if (redis) await redis.ping();
+    else cache = "unavailable";
+  } catch {
+    cache = "degraded";
+  }
+  const overall = database === "outage" ? "major_outage" : recentErrors > 50 ? "degraded" : "operational";
+  res.json({
+    status: overall,
+    services: { api: "operational", database, cache },
+    errorsLastHour: recentErrors,
+    timestamp: new Date().toISOString(),
+  });
+}));
+
+router.get("/errors", requireAuth, requireRole("ADMIN", "SUPER_ADMIN"), asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+  const { module, since } = req.query;
+  const where: Record<string, unknown> = { level: "ERROR" };
+  if (module) where.module = module;
+  if (since) where.createdAt = { gte: new Date(since as string) };
+  const [total, errors, byModule] = await Promise.all([
+    prisma.systemLog.count({ where: where as any }),
+    prisma.systemLog.findMany({ where: where as any, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
+    prisma.systemLog.groupBy({ by: ["module"], _count: true, where: { level: "ERROR", createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }),
+  ]);
+  res.json({ errors, byModule24h: byModule, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+}));
+
 export default router;

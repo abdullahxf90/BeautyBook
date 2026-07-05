@@ -117,4 +117,108 @@ router.put("/tickets/:id/assign", requireRole("ADMIN", "SUPER_ADMIN"), validate(
   res.json({ ticket: updated });
 }));
 
+router.post("/tickets/:id/staff-messages", requireRole("ADMIN", "SUPER_ADMIN"), validate(messageSchema), asyncHandler(async (req, res) => {
+  const { content } = getValidated<z.infer<typeof messageSchema>>(req);
+  const ticket = await prisma.supportTicket.findUnique({ where: { id: req.params.id } });
+  if (!ticket) throw new ApiError(404, "Ticket not found");
+  const [message] = await prisma.$transaction([
+    prisma.ticketMessage.create({
+      data: { ticketId: req.params.id, userId: req.user!.id, content, isStaff: true },
+    }),
+    prisma.supportTicket.update({
+      where: { id: req.params.id },
+      data: {
+        firstResponseAt: ticket.firstResponseAt ?? new Date(),
+        status: ticket.status === "OPEN" ? "IN_PROGRESS" : ticket.status,
+      },
+    }),
+  ]);
+  res.status(201).json({ message });
+}));
+
+const satisfactionSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().max(1000).optional(),
+});
+
+router.post("/tickets/:id/satisfaction", validate(satisfactionSchema), asyncHandler(async (req, res) => {
+  const { rating, comment } = getValidated<z.infer<typeof satisfactionSchema>>(req);
+  const ticket = await prisma.supportTicket.findUnique({ where: { id: req.params.id } });
+  if (!ticket || ticket.userId !== req.user!.id) throw new ApiError(404, "Ticket not found");
+  if (ticket.status !== "RESOLVED" && ticket.status !== "CLOSED") throw new ApiError(400, "Ticket must be resolved before rating");
+  if (ticket.satisfactionRating != null) throw new ApiError(409, "Ticket already rated");
+  const updated = await prisma.supportTicket.update({
+    where: { id: req.params.id },
+    data: { satisfactionRating: rating, satisfactionComment: comment ?? null },
+  });
+  res.json({ ticket: updated });
+}));
+
+router.get("/analytics", requireRole("ADMIN", "SUPER_ADMIN"), asyncHandler(async (_req, res) => {
+  const [byStatus, byPriority, byCategory, rated, timed] = await Promise.all([
+    prisma.supportTicket.groupBy({ by: ["status"], _count: true }),
+    prisma.supportTicket.groupBy({ by: ["priority"], _count: true }),
+    prisma.supportTicket.groupBy({ by: ["category"], _count: true }),
+    prisma.supportTicket.aggregate({ _avg: { satisfactionRating: true }, _count: { satisfactionRating: true } }),
+    prisma.supportTicket.findMany({
+      where: { OR: [{ firstResponseAt: { not: null } }, { resolvedAt: { not: null } }] },
+      select: { createdAt: true, firstResponseAt: true, resolvedAt: true },
+      take: 1000,
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  const avgMs = (pairs: Array<number | null>) => {
+    const vals = pairs.filter((v): v is number => v != null && v >= 0);
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+  };
+  const firstResponseMs = avgMs(timed.map((t) => (t.firstResponseAt ? t.firstResponseAt.getTime() - t.createdAt.getTime() : null)));
+  const resolutionMs = avgMs(timed.map((t) => (t.resolvedAt ? t.resolvedAt.getTime() - t.createdAt.getTime() : null)));
+  res.json({
+    byStatus,
+    byPriority,
+    byCategory,
+    csat: { average: rated._avg.satisfactionRating, responses: rated._count.satisfactionRating },
+    avgFirstResponseMs: firstResponseMs,
+    avgResolutionMs: resolutionMs,
+  });
+}));
+
+router.get("/health-scores", requireRole("ADMIN", "SUPER_ADMIN"), asyncHandler(async (req, res) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 25));
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const [bookingGroups, openTickets, lowCsat] = await Promise.all([
+    prisma.booking.groupBy({ by: ["userId", "status"], _count: true, where: { createdAt: { gte: since } } }),
+    prisma.supportTicket.groupBy({ by: ["userId"], _count: true, where: { status: { in: ["OPEN", "IN_PROGRESS"] } } }),
+    prisma.supportTicket.groupBy({ by: ["userId"], _avg: { satisfactionRating: true }, where: { satisfactionRating: { not: null } } }),
+  ]);
+  const stats = new Map<string, { total: number; cancelled: number; noShow: number; openTickets: number; csat: number | null }>();
+  const get = (id: string) => {
+    let s = stats.get(id);
+    if (!s) { s = { total: 0, cancelled: 0, noShow: 0, openTickets: 0, csat: null }; stats.set(id, s); }
+    return s;
+  };
+  for (const g of bookingGroups) {
+    const s = get(g.userId);
+    s.total += g._count;
+    if (g.status === "CANCELLED") s.cancelled += g._count;
+    if (g.status === "NO_SHOW") s.noShow += g._count;
+  }
+  for (const g of openTickets) get(g.userId).openTickets = g._count;
+  for (const g of lowCsat) get(g.userId).csat = g._avg.satisfactionRating;
+  // 100 = healthy; deductions for cancellations, no-shows, open tickets, poor CSAT
+  const scored = Array.from(stats.entries()).map(([userId, s]) => {
+    let score = 100;
+    if (s.total > 0) score -= Math.round((s.cancelled / s.total) * 40 + (s.noShow / s.total) * 30);
+    score -= Math.min(20, s.openTickets * 10);
+    if (s.csat != null) score -= Math.round((5 - s.csat) * 5);
+    return { userId, score: Math.max(0, score), ...s };
+  }).sort((a, b) => a.score - b.score).slice(0, limit);
+  const users = await prisma.user.findMany({
+    where: { id: { in: scored.map((s) => s.userId) } },
+    select: { id: true, name: true, email: true, loyaltyTier: true },
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  res.json({ healthScores: scored.map((s) => ({ ...s, user: byId.get(s.userId) ?? null })) });
+}));
+
 export default router;
