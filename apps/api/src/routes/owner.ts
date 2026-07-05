@@ -74,6 +74,63 @@ router.delete("/services/:id", asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Packages (bundled services, e.g. bridal package)
+const packageSchema = z.object({
+  name: z.string().min(2).max(100),
+  description: z.string().max(500).optional(),
+  price: z.number().int().min(1),
+  discountPct: z.number().int().min(0).max(90).optional(),
+  imageUrl: z.string().url().optional(),
+  serviceIds: z.array(z.string()).min(1),
+});
+
+router.get("/salons/:id/packages", asyncHandler(async (req, res) => {
+  const packages = await prisma.package.findMany({
+    where: { salonId: req.params.id },
+    orderBy: { sortOrder: "asc" },
+    include: { services: { include: { service: { select: { id: true, name: true, price: true, durationMin: true } } } } },
+  });
+  res.json({ packages });
+}));
+
+router.post("/salons/:id/packages", validate(packageSchema), asyncHandler(async (req, res) => {
+  const { serviceIds, ...data } = getValidated<z.infer<typeof packageSchema>>(req);
+  const services = await prisma.service.findMany({ where: { id: { in: serviceIds }, salonId: req.params.id } });
+  if (services.length !== serviceIds.length) throw new ApiError(400, "All services must belong to this salon");
+  const pkg = await prisma.package.create({
+    data: {
+      ...data,
+      salonId: req.params.id,
+      services: { create: serviceIds.map((serviceId) => ({ serviceId })) },
+    },
+    include: { services: { include: { service: { select: { id: true, name: true, price: true, durationMin: true } } } } },
+  });
+  res.status(201).json({ package: pkg });
+}));
+
+router.patch("/packages/:id", validate(packageSchema.partial()), asyncHandler(async (req, res) => {
+  const { serviceIds, ...data } = getValidated<Partial<z.infer<typeof packageSchema>>>(req);
+  const existing = await prisma.package.findUnique({ where: { id: req.params.id } });
+  if (!existing) throw new ApiError(404, "Package not found");
+  if (serviceIds) {
+    const services = await prisma.service.findMany({ where: { id: { in: serviceIds }, salonId: existing.salonId } });
+    if (services.length !== serviceIds.length) throw new ApiError(400, "All services must belong to this salon");
+    await prisma.packageService.deleteMany({ where: { packageId: existing.id } });
+    await prisma.packageService.createMany({ data: serviceIds.map((serviceId) => ({ packageId: existing.id, serviceId })) });
+  }
+  const pkg = await prisma.package.update({
+    where: { id: existing.id },
+    data,
+    include: { services: { include: { service: { select: { id: true, name: true, price: true, durationMin: true } } } } },
+  });
+  res.json({ package: pkg });
+}));
+
+router.delete("/packages/:id", asyncHandler(async (req, res) => {
+  await prisma.package.update({ where: { id: req.params.id }, data: { active: false } });
+  res.json({ ok: true });
+}));
+
 // Employees
 router.post("/salons/:id/employees", validate(z.object({ name: z.string().min(2).max(80), title: z.string().min(2).max(80) })), asyncHandler(async (req, res) => {
   const data = getValidated<any>(req);

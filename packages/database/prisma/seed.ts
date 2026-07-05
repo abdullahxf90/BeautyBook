@@ -254,6 +254,25 @@ async function main() {
     }
   }
 
+  // ---- Packages (bundle each salon's top services at a 15% discount) ----
+  const salonsForPackages = await prisma.salon.findMany({
+    include: { services: { where: { active: true }, orderBy: { price: "desc" }, take: 3 }, packages: true },
+  });
+  for (const s of salonsForPackages) {
+    if (s.packages.length > 0 || s.services.length < 2) continue;
+    const bundlePrice = Math.round(s.services.reduce((sum, sv) => sum + sv.price, 0) * 0.85);
+    await prisma.package.create({
+      data: {
+        salonId: s.id,
+        name: `${s.name} Signature Package`,
+        description: `Our most-loved services bundled together: ${s.services.map((sv) => sv.name).join(", ")}.`,
+        price: bundlePrice,
+        discountPct: 15,
+        services: { create: s.services.map((sv) => ({ serviceId: sv.id })) },
+      },
+    });
+  }
+
   console.log("Seed complete.");
   console.log("Logins — admin@beautybook.pk / owner@beautybook.pk / ayesha@example.com / zara@example.com, password: Password123!");
 }

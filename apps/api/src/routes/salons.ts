@@ -78,6 +78,11 @@ router.get("/:slug", asyncHandler(async (req, res) => {
       area: { include: { city: true } },
       images: { orderBy: { sort: "asc" } },
       services: { where: { active: true }, include: { category: true }, orderBy: { price: "asc" } },
+      packages: {
+        where: { active: true },
+        orderBy: { sortOrder: "asc" },
+        include: { services: { include: { service: { select: { id: true, name: true, price: true, durationMin: true } } } } },
+      },
       employees: { where: { active: true } },
       workingHours: { orderBy: { dayOfWeek: "asc" } },
     },

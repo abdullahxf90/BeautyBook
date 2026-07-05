@@ -156,6 +156,9 @@ router.post("/:id/cancel", asyncHandler(async (req, res) => {
     },
     include: bookingInclude,
   });
+  await prisma.bookingTracking.create({
+    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "CANCELLED", changedBy: req.user!.id, reason: "Cancelled by customer" },
+  });
   await prisma.notification.create({
     data: { userId: req.user!.id, title: "Booking cancelled", body: `Booking ${booking.code} has been cancelled.` },
   });
@@ -183,6 +186,9 @@ router.post("/:id/reschedule", validate(rescheduleSchema), asyncHandler(async (r
     data: { startAt },
     include: bookingInclude,
   });
+  await prisma.bookingTracking.create({
+    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: booking.status, changedBy: req.user!.id, reason: `Rescheduled to ${date} ${time}` },
+  });
   res.json({ booking: updated });
 }));
 
@@ -198,6 +204,9 @@ router.post("/:id/complete", requireRole("OWNER", "ADMIN"), asyncHandler(async (
     where: { id: booking.id },
     data: { status: "COMPLETED", payment: { update: { status: "PAID" } } },
     include: bookingInclude,
+  });
+  await prisma.bookingTracking.create({
+    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "COMPLETED", changedBy: req.user!.id, reason: "Marked completed" },
   });
   await prisma.user.update({ where: { id: booking.userId }, data: { loyaltyPoints: { increment: points } } });
   await prisma.loyaltyTransaction.create({

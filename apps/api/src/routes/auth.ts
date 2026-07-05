@@ -31,6 +31,16 @@ async function recordLogin(userId: string, req: Request, provider: string, succe
   await prisma.loginHistory.create({
     data: { userId, provider, success, failReason, ipAddress: meta.ipAddress, userAgent: meta.userAgent },
   }).catch(() => {});
+  if (success) {
+    await prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } }).catch(() => {});
+  }
+}
+
+/** Rejects logins for suspended, banned, or deleted accounts. */
+function assertAccountActive(user: { status: string }) {
+  if (user.status === "SUSPENDED") throw new ApiError(403, "Your account is suspended. Contact support.");
+  if (user.status === "BANNED") throw new ApiError(403, "Your account has been banned.");
+  if (user.status === "DELETED") throw new ApiError(403, "This account has been deleted.");
 }
 
 /** Creates an OTP for the user after enforcing the resend limit; delivers it via in-app notification. */
@@ -127,6 +137,7 @@ router.post("/login", validate(loginSchema), asyncHandler(async (req, res) => {
     if (user) await recordLogin(user.id, req, "EMAIL", false, "INVALID_CREDENTIALS");
     throw new ApiError(401, "Invalid email or password");
   }
+  assertAccountActive(user);
   if (user.twoFactorEnabled) {
     await issueOtp(user.id, "LOGIN", "Your login code");
     const challengeToken = jwt.sign({ sub: user.id, purpose: "2FA" }, config.jwtSecret, { expiresIn: "10m" });
@@ -148,6 +159,7 @@ router.post("/login/verify-2fa", validate(verify2faSchema), asyncHandler(async (
   if (payload.purpose !== "2FA") throw new ApiError(401, "Invalid challenge token");
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user) throw new ApiError(404, "User not found");
+  assertAccountActive(user);
   await consumeOtp(user.id, "LOGIN", code);
   await recordLogin(user.id, req, "EMAIL", true);
   const tokens = await issueTokens(user);
@@ -314,15 +326,15 @@ router.post("/2fa/disable", requireAuth, validate(z.object({ password: z.string(
 
 // ─── Social login (Google / Facebook / Apple) ───
 
-interface SocialProfile { email: string; name: string; emailVerified: boolean }
+interface SocialProfile { email: string; name: string; emailVerified: boolean; providerId?: string }
 
 async function verifyGoogleToken(idToken: string): Promise<SocialProfile> {
   const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
   if (!res.ok) throw new ApiError(401, "Invalid Google token");
-  const info = (await res.json()) as { aud?: string; email?: string; email_verified?: string; name?: string };
+  const info = (await res.json()) as { aud?: string; sub?: string; email?: string; email_verified?: string; name?: string };
   if (config.googleClientId && info.aud !== config.googleClientId) throw new ApiError(401, "Google token audience mismatch");
   if (!info.email) throw new ApiError(401, "Google token has no email");
-  return { email: info.email, name: info.name || info.email.split("@")[0], emailVerified: info.email_verified === "true" };
+  return { email: info.email, name: info.name || info.email.split("@")[0], emailVerified: info.email_verified === "true", providerId: info.sub };
 }
 
 async function verifyFacebookToken(accessToken: string): Promise<SocialProfile> {
@@ -330,7 +342,7 @@ async function verifyFacebookToken(accessToken: string): Promise<SocialProfile> 
   if (!res.ok) throw new ApiError(401, "Invalid Facebook token");
   const info = (await res.json()) as { id?: string; name?: string; email?: string };
   if (!info.id || !info.email) throw new ApiError(401, "Facebook account has no email available");
-  return { email: info.email, name: info.name || info.email.split("@")[0], emailVerified: true };
+  return { email: info.email, name: info.name || info.email.split("@")[0], emailVerified: true, providerId: info.id };
 }
 
 async function verifyAppleToken(identityToken: string): Promise<SocialProfile> {
@@ -371,6 +383,7 @@ router.post("/social", validate(socialSchema), asyncHandler(async (req, res) => 
     : provider === "FACEBOOK" ? await verifyFacebookToken(token)
     : await verifyAppleToken(token);
 
+  const idField = provider === "GOOGLE" ? "googleId" : provider === "FACEBOOK" ? "facebookId" : null;
   let user = await prisma.user.findUnique({ where: { email: profile.email } });
   if (!user) {
     user = await prisma.user.create({
@@ -379,13 +392,20 @@ router.post("/social", validate(socialSchema), asyncHandler(async (req, res) => 
         email: profile.email,
         emailVerified: profile.emailVerified,
         passwordHash: await bcrypt.hash(nanoid(32), 10),
+        ...(idField && profile.providerId ? { [idField]: profile.providerId } : {}),
       },
     });
     await prisma.notification.create({
       data: { userId: user.id, title: "Welcome to BeautyBook", body: "Find. Book. Glow. Your beauty journey starts here." },
     });
-  } else if (profile.emailVerified && !user.emailVerified) {
-    user = await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+  } else {
+    assertAccountActive(user);
+    const updates: Record<string, unknown> = {};
+    if (profile.emailVerified && !user.emailVerified) updates.emailVerified = true;
+    if (idField && profile.providerId && !(user as Record<string, unknown>)[idField]) updates[idField] = profile.providerId;
+    if (Object.keys(updates).length) {
+      user = await prisma.user.update({ where: { id: user.id }, data: updates });
+    }
   }
   await recordLogin(user.id, req, provider, true);
   const tokens = await issueTokens(user);

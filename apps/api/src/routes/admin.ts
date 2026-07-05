@@ -47,6 +47,38 @@ router.patch("/users/:id/role", validate(z.object({ role: z.enum(["CUSTOMER", "O
   res.json({ user });
 }));
 
+// Account status control: suspend, ban, or reactivate a user
+const statusSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED", "BANNED"]),
+  reason: z.string().max(500).optional(),
+});
+
+router.patch("/users/:id/status", validate(statusSchema), asyncHandler(async (req, res) => {
+  const { status, reason } = getValidated<z.infer<typeof statusSchema>>(req);
+  const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!target) throw new ApiError(404, "User not found");
+  if (target.role === "SUPER_ADMIN") throw new ApiError(403, "Cannot change the status of a super admin");
+  const user = await prisma.user.update({
+    where: { id: target.id },
+    data: { status },
+    select: { id: true, name: true, email: true, role: true, status: true },
+  });
+  if (status !== "ACTIVE") {
+    // Force logout everywhere; blocked accounts also cannot log back in.
+    await prisma.refreshToken.deleteMany({ where: { userId: target.id } });
+  }
+  await prisma.auditLog.create({
+    data: {
+      userId: req.user!.id,
+      action: `USER_${status}`,
+      entity: "User",
+      entityId: target.id,
+      details: reason || null,
+    },
+  }).catch(() => {});
+  res.json({ user });
+}));
+
 router.get("/salons", asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));

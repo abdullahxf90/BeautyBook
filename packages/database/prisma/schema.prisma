@@ -102,6 +102,13 @@ enum LeaveStatus {
 // AUTHENTICATION
 // ──────────────────────────────────────────────
 
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  DELETED
+}
+
 model User {
   id                String              @id @default(cuid())
   email             String              @unique
@@ -109,8 +116,13 @@ model User {
   name              String
   passwordHash      String
   role              Role                @default(CUSTOMER)
+  status            AccountStatus       @default(ACTIVE)
   avatarUrl         String?
   coverUrl          String?
+  googleId          String?             @unique
+  facebookId        String?             @unique
+  dateOfBirth       DateTime?
+  gender            Gender?
   emailVerified     Boolean             @default(false)
   phoneVerified     Boolean             @default(false)
   twoFactorEnabled  Boolean             @default(false)
@@ -120,6 +132,8 @@ model User {
   loyaltyTier       String              @default("BRONZE") // BRONZE, SILVER, GOLD, PLATINUM, DIAMOND
   referralCode      String?             @unique
   referredBy        String?
+  lastLoginAt       DateTime?
+  deletedAt         DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -440,6 +454,7 @@ model Salon {
   reviews         Review[]
   favorites       Favorite[]
   coupons         Coupon[]
+  packages        Package[]
   policy          SalonPolicy?
   verification    BusinessVerification?
   analyticsEvents AnalyticsEvent[]
@@ -852,10 +867,40 @@ model Service {
   tags            ServiceTagMapping[]
   skillMappings   StaffSkill[] @relation("ServiceSkills")
   waitlistEntries BookingWaitlist[]
+  packageItems    PackageService[]
 
   @@index([salonId])
   @@index([categoryId])
   @@index([serviceCategoryId])
+}
+
+model Package {
+  id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       Int
+  discountPct Int      @default(0)
+  imageUrl    String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  services    PackageService[]
+
+  @@index([salonId])
+}
+
+model PackageService {
+  id        String  @id @default(cuid())
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, serviceId])
 }
 
 model ServiceVariant {
