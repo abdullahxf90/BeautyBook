@@ -4,6 +4,8 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { errorHandler } from "./utils/http";
+import { requestLogger } from "./middleware/requestLog";
+import { securityHeaders, csrfProtection } from "./middleware/security";
 import authRoutes from "./routes/auth";
 import metaRoutes from "./routes/meta";
 import salonRoutes from "./routes/salons";
@@ -23,7 +25,7 @@ import addressRoutes from "./routes/addresses";
 import ownerRoutes from "./routes/owner";
 import searchRoutes from "./routes/search";
 import deviceRoutes from "./routes/devices";
-import securityRoutes from "./routes/security";
+import securityRoute from "./routes/security";
 import staffRoutes from "./routes/staff";
 import crmRoutes from "./routes/crm";
 import inventoryRoutes from "./routes/inventory";
@@ -44,24 +46,24 @@ import reportRoutes from "./routes/reports";
 import compareRoutes from "./routes/compare";
 import loyaltyRoutes from "./routes/loyalty";
 import discoveryRoutes from "./routes/discovery";
+import infraRoutes from "./routes/infra";
 
 const app = express();
 
-app.use(helmet());
-// Local dev always accepts the local website; production origins come from CORS_ORIGIN.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(securityHeaders);
 const corsOrigins = new Set(config.corsOrigin.split(","));
 if (!process.env.VERCEL && process.env.NODE_ENV !== "production") {
   corsOrigins.add("http://localhost:3000");
 }
 app.use(cors({ origin: [...corsOrigins], credentials: true }));
 app.use(express.json({ limit: "1mb" }));
+app.use(requestLogger);
 app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }));
 
 const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-app.get("/health", (_req, res) => res.json({ ok: true, service: "beautybook-api" }));
-
-app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/auth", authLimiter, csrfProtection, authRoutes);
 app.use("/api/meta", metaRoutes);
 app.use("/api/salons", salonRoutes);
 app.use("/api/bookings", bookingRoutes);
@@ -80,7 +82,7 @@ app.use("/api/addresses", addressRoutes);
 app.use("/api/owner", ownerRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/devices", deviceRoutes);
-app.use("/api/security", securityRoutes);
+app.use("/api/security", securityRoute);
 app.use("/api/staff", staffRoutes);
 app.use("/api/crm", crmRoutes);
 app.use("/api/inventory", inventoryRoutes);
@@ -101,11 +103,11 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/compare", compareRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/discovery", discoveryRoutes);
+app.use("/api/infra", infraRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 app.use(errorHandler);
 
-// Only start the HTTP server when running locally (not in Vercel serverless)
 if (!process.env.VERCEL) {
   app.listen(config.port, () => {
     console.log(`BeautyBook API listening on http://localhost:${config.port}`);

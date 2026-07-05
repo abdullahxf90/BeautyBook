@@ -1,0 +1,30 @@
+name: CD - Staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [staging]
+    types: [completed]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/beautybook
+            docker compose -f docker/docker-compose.staging.yml pull
+            docker compose -f docker/docker-compose.staging.yml up -d --remove-orphans
+            docker system prune -f
+      - name: Health check
+        run: |
+          sleep 15
+          curl -sf https://staging.beauty-book.com/api/health || exit 1

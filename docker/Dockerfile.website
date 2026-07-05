@@ -1,0 +1,25 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN corepack enable
+COPY package.json package-lock.json ./
+COPY apps/website/package.json apps/website/package.json
+COPY packages/database/package.json packages/database/package.json
+RUN --mount=type=cache,target=/root/.npm npm ci --workspaces --include-workspace-root
+COPY packages packages
+COPY apps/website apps/website
+RUN npm run build -w @beautybook/website
+RUN npm prune --omit=dev --workspaces --include-workspace-root
+
+FROM node:20-alpine
+WORKDIR /app
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+COPY --from=builder /app/node_modules node_modules
+COPY --from=builder /app/apps/website/.next .next
+COPY --from=builder /app/apps/website/public apps/website/public
+COPY --from=builder /app/apps/website/package.json apps/website/package.json
+COPY --from=builder /app/apps/website/next.config.mjs apps/website/next.config.mjs
+USER appuser
+EXPOSE 3000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -sf http://localhost:3000/health || exit 1
+CMD ["npx", "next", "start", "-p", "3000"]

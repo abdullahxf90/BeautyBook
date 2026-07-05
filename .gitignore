@@ -5,5 +5,8 @@ dist/
 .env.local
 *.tsbuildinfo
 .DS_Store
-
 .vercel
+*.log
+backups/
+coverage/
+.turbo/

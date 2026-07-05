@@ -1,0 +1,70 @@
+version: "3.8"
+
+x-common: &common
+  restart: unless-stopped
+  networks: [beautybook]
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    ports: ["4000:4000"]
+    env_file: ../.env
+    environment:
+      - NODE_ENV=development
+      - API_PORT=4000
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_started
+    volumes:
+      - ../apps/api/src:/app/apps/api/src
+      - ../packages/database/prisma:/app/packages/database/prisma
+    <<: *common
+
+  website:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.website
+    ports: ["3000:3000"]
+    env_file: ../apps/website/.env.local
+    environment:
+      - NODE_ENV=development
+    depends_on: [api]
+    <<: *common
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    <<: *common
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    command: ["node", "apps/api/dist/worker.js"]
+    env_file: ../.env
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_started
+      api:
+        condition: service_started
+    <<: *common
+
+volumes:
+  redis_data:
+
+networks:
+  beautybook:
+    driver: bridge

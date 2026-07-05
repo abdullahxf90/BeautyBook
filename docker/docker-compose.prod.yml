@@ -1,0 +1,112 @@
+version: "3.8"
+
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  api:
+    image: ${REGISTRY:-ghcr.io}/beautybook/api:${TAG:-latest}
+    ports: ["4000:4000"]
+    env_file: ../.env.production
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=warn
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 4
+      resources:
+        limits: { cpus: "2", memory: "1G" }
+        reservations: { cpus: "1", memory: "512M" }
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *logging
+    networks: [beautybook]
+
+  website:
+    image: ${REGISTRY:-ghcr.io}/beautybook/website:${TAG:-latest}
+    ports: ["3000:3000"]
+    env_file: ../.env.production
+    environment:
+      - NODE_ENV=production
+    depends_on: [api]
+    deploy:
+      replicas: 4
+      resources:
+        limits: { cpus: "2", memory: "1G" }
+        reservations: { cpus: "1", memory: "512M" }
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+    logging: *logging
+    networks: [beautybook]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: "512M" }
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging: *logging
+    networks: [beautybook]
+
+  worker:
+    image: ${REGISTRY:-ghcr.io}/beautybook/api:${TAG:-latest}
+    command: ["node", "apps/api/dist/worker.js"]
+    env_file: ../.env.production
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: "1", memory: "512M" }
+        reservations: { cpus: "0.5", memory: "256M" }
+    logging: *logging
+    networks: [beautybook]
+
+  # Sidekiq-style monitoring dashboard (optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports: ["8081:8081"]
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    profiles: ["monitoring"]
+    depends_on: [redis]
+    logging: *logging
+    networks: [beautybook]
+
+volumes:
+  redis_data:
+
+networks:
+  beautybook:
+    driver: bridge

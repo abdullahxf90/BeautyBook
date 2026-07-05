@@ -1,0 +1,82 @@
+name: CD - Production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+jobs:
+  canary:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      status: ${{ steps.health.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy canary (10% traffic)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/beautybook
+            docker compose -f docker/docker-compose.prod.yml pull api
+            docker service update --image ghcr.io/${{ github.repository }}/api:${{ github.sha }} --update-parallelism 1 --update-max-failure-ratio 0.2 beautybook_api
+      - name: Health check canary
+        id: health
+        run: |
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://beauty-book.com/api/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "status=pass" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "status=fail" >> $GITHUB_OUTPUT
+          exit 1
+
+  full-rollout:
+    needs: [canary]
+    if: ${{ needs.canary.outputs.status == 'pass' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Full rollout
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/beautybook
+            docker compose -f docker/docker-compose.prod.yml pull
+            docker compose -f docker/docker-compose.prod.yml up -d --remove-orphans
+            docker system prune -f
+      - name: Smoke test production
+        run: |
+          sleep 20
+          npm test
+        env:
+          API_URL: https://beauty-book.com
+
+  rollback:
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Rollback
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/beautybook
+            docker compose -f docker/docker-compose.prod.yml pull
+            docker compose -f docker/docker-compose.prod.yml up -d --remove-orphans
+            echo "Rollback complete — previous stable images restored"

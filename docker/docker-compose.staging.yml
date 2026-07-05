@@ -1,0 +1,82 @@
+version: "3.8"
+
+x-common: &common
+  restart: unless-stopped
+  networks: [beautybook]
+
+services:
+  api:
+    image: ${REGISTRY:-ghcr.io}/beautybook/api:${TAG:-staging}
+    ports: ["4000:4000"]
+    env_file: ../.env.staging
+    environment:
+      - NODE_ENV=staging
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=info
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: "1", memory: "512M" }
+        reservations: { cpus: "0.5", memory: "256M" }
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    <<: *common
+
+  website:
+    image: ${REGISTRY:-ghcr.io}/beautybook/website:${TAG:-staging}
+    ports: ["3000:3000"]
+    env_file: ../.env.staging
+    environment:
+      - NODE_ENV=staging
+    depends_on: [api]
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: "1", memory: "512M" }
+        reservations: { cpus: "0.5", memory: "256M" }
+    <<: *common
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: "256M" }
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    <<: *common
+
+  worker:
+    image: ${REGISTRY:-ghcr.io}/beautybook/api:${TAG:-staging}
+    command: ["node", "apps/api/dist/worker.js"]
+    env_file: ../.env.staging
+    environment:
+      - NODE_ENV=staging
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 1
+      resources:
+        limits: { cpus: "0.5", memory: "256M" }
+    <<: *common
+
+volumes:
+  redis_data:
+
+networks:
+  beautybook:
+    driver: bridge
