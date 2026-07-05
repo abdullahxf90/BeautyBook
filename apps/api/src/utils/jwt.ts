@@ -25,3 +25,11 @@ export function verifyAccessToken(token: string): TokenPayload {
 export function verifyRefreshToken(token: string): TokenPayload {
   return jwt.verify(token, config.jwtRefreshSecret) as TokenPayload;
 }
+
+export function signResetToken(payload: TokenPayload) {
+  return jwt.sign(payload, config.jwtSecret, { expiresIn: "15m" });
+}
+
+export function verifyResetToken(token: string): TokenPayload {
+  return jwt.verify(token, config.jwtSecret) as TokenPayload;
+}

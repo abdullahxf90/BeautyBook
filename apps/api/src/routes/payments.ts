@@ -210,56 +210,67 @@ router.post("/process", requireAuth, validate(z.object({
   method: z.enum(["CASH", "CARD", "STRIPE", "JAZZCASH", "EASYPAISA"]),
   couponCode: z.string().optional(),
   redeemPoints: z.number().int().min(0).optional(),
+  idempotencyKey: z.string().uuid().optional(),
 })), asyncHandler(async (req, res) => {
-  const { bookingId, method, couponCode, redeemPoints } = getValidated<{ bookingId: string; method: string; couponCode?: string; redeemPoints?: number }>(req);
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { payment: true } });
-  if (!booking) throw new ApiError(404, "Booking not found");
-  if (booking.payment) throw new ApiError(400, "Payment already exists for this booking");
+  const { bookingId, method, couponCode, redeemPoints, idempotencyKey } = getValidated<{ bookingId: string; method: string; couponCode?: string; redeemPoints?: number; idempotencyKey?: string }>(req);
 
-  let total = booking.total;
-  let discount = 0;
-  let couponId: string | undefined;
-  let pointsUsed = 0;
-
-  if (couponCode) {
-    const coupon = await prisma.coupon.findUnique({ where: { code: couponCode.toUpperCase() } });
-    if (!coupon || !coupon.active) throw new ApiError(400, "Invalid coupon");
-    if (coupon.expiresAt && coupon.expiresAt < new Date()) throw new ApiError(400, "Coupon expired");
-    if (coupon.maxUses && coupon.uses >= coupon.maxUses) throw new ApiError(400, "Coupon fully redeemed");
-    discount = Math.min(coupon.type === "PERCENT" ? Math.round((total * coupon.value) / 100) : coupon.value, total);
-    couponId = coupon.id;
-    total -= discount;
-    await prisma.coupon.update({ where: { id: coupon.id }, data: { uses: { increment: 1 } } });
-    await prisma.couponUsage.create({ data: { couponId: coupon.id, userId: req.user!.id } });
+  if (idempotencyKey) {
+    const existing = await prisma.payment.findFirst({ where: { providerRef: idempotencyKey } });
+    if (existing) return res.json({ payment: existing, idempotent: true });
   }
 
-  if (redeemPoints && redeemPoints > 0) {
-    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { loyaltyPoints: true } });
-    const maxRedeem = Math.min(redeemPoints, user?.loyaltyPoints ?? 0, total);
-    if (maxRedeem > 0) {
-      pointsUsed = maxRedeem;
-      total -= maxRedeem;
-      await prisma.user.update({ where: { id: req.user!.id }, data: { loyaltyPoints: { decrement: maxRedeem } } });
-      await prisma.loyaltyTransaction.create({ data: { userId: req.user!.id, points: maxRedeem, reason: "REDEMPTION", type: "REDEEM" } });
+  const result = await prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findUnique({ where: { id: bookingId }, include: { payment: true } });
+    if (!booking) throw new ApiError(404, "Booking not found");
+    if (booking.payment) throw new ApiError(400, "Payment already exists for this booking");
+
+    let total = booking.total;
+    let discount = 0;
+    let couponId: string | undefined;
+    let pointsUsed = 0;
+
+    if (couponCode) {
+      const coupon = await tx.coupon.findUnique({ where: { code: couponCode.toUpperCase() } });
+      if (!coupon || !coupon.active) throw new ApiError(400, "Invalid coupon");
+      if (coupon.expiresAt && coupon.expiresAt < new Date()) throw new ApiError(400, "Coupon expired");
+      if (coupon.maxUses && coupon.uses >= coupon.maxUses) throw new ApiError(400, "Coupon fully redeemed");
+      discount = Math.min(coupon.type === "PERCENT" ? Math.round((total * coupon.value) / 100) : coupon.value, total);
+      couponId = coupon.id;
+      total -= discount;
+      await tx.coupon.update({ where: { id: coupon.id }, data: { uses: { increment: 1 } } });
+      await tx.couponUsage.create({ data: { couponId: coupon.id, userId: req.user!.id } });
     }
-  }
 
-  const payment = await prisma.payment.create({
-    data: { bookingId, method: method as any, status: "PENDING", amount: Math.max(0, total) },
+    if (redeemPoints && redeemPoints > 0) {
+      const user = await tx.user.findUnique({ where: { id: req.user!.id }, select: { loyaltyPoints: true } });
+      const maxRedeem = Math.min(redeemPoints, user?.loyaltyPoints ?? 0, total);
+      if (maxRedeem > 0) {
+        pointsUsed = maxRedeem;
+        total -= maxRedeem;
+        await tx.user.update({ where: { id: req.user!.id }, data: { loyaltyPoints: { decrement: maxRedeem } } });
+        await tx.loyaltyTransaction.create({ data: { userId: req.user!.id, points: maxRedeem, reason: "REDEMPTION", type: "REDEEM" } });
+      }
+    }
+
+    const payment = await tx.payment.create({
+      data: { bookingId, method: method as any, status: "PENDING", amount: Math.max(0, total), providerRef: idempotencyKey || undefined },
+    });
+
+    if (couponId) {
+      await tx.booking.update({ where: { id: bookingId }, data: { couponId, discount } });
+    }
+
+    if (method === "CASH") {
+      const user = await tx.user.findUnique({ where: { id: req.user!.id }, select: { loyaltyPoints: true, loyaltyTier: true } });
+      const pointsEarned = Math.floor(total * 0.05);
+      await tx.loyaltyTransaction.create({ data: { userId: req.user!.id, points: pointsEarned, reason: "BOOKING", type: "EARN", bookingId } });
+      await tx.user.update({ where: { id: req.user!.id }, data: { loyaltyPoints: { increment: pointsEarned } } });
+    }
+
+    return { payment, discount, pointsUsed, total };
   });
 
-  if (couponId) {
-    await prisma.booking.update({ where: { id: bookingId }, data: { couponId, discount } });
-  }
-
-  if (method === "CASH") {
-    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { loyaltyPoints: true, loyaltyTier: true } });
-    const pointsEarned = Math.floor(total * 0.05);
-    await prisma.loyaltyTransaction.create({ data: { userId: req.user!.id, points: pointsEarned, reason: "BOOKING", type: "EARN", bookingId } });
-    await prisma.user.update({ where: { id: req.user!.id }, data: { loyaltyPoints: { increment: pointsEarned } } });
-  }
-
-  res.status(201).json({ payment, discount, pointsUsed, total });
+  res.status(201).json(result);
 }));
 
 router.post("/:id/confirm", requireAuth, asyncHandler(async (req, res) => {

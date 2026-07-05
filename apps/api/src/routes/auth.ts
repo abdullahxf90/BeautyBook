@@ -6,7 +6,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { prisma } from "@beautybook/database";
 import { ApiError, asyncHandler } from "../utils/http";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt";
+import { signAccessToken, signRefreshToken, signResetToken, verifyRefreshToken, verifyResetToken } from "../utils/jwt";
 import { requireAuth } from "../middleware/auth";
 import { getValidated, validate } from "../middleware/validate";
 import { config } from "../config";
@@ -232,20 +232,18 @@ router.post("/forgot-password", validate(z.object({ email: z.string().email() })
   const { email } = getValidated<{ email: string }>(req);
   const user = await prisma.user.findUnique({ where: { email } });
   if (user) {
-    const resetToken = signAccessToken({ sub: user.id, role: user.role });
+    const resetToken = signResetToken({ sub: user.id, role: user.role });
     await prisma.notification.create({
       data: { userId: user.id, title: "Password reset requested", body: `Use this token to reset: ${resetToken}` },
     });
   }
-  // Always return OK to prevent email enumeration
   res.json({ ok: true });
 }));
 
-// Reset password
 router.post("/reset-password", validate(z.object({ token: z.string(), password: z.string().min(8).max(100) })), asyncHandler(async (req, res) => {
   const { token, password } = getValidated<{ token: string; password: string }>(req);
   let payload;
-  try { payload = verifyRefreshToken(token); } catch { throw new ApiError(400, "Invalid or expired reset token"); }
+  try { payload = verifyResetToken(token); } catch { throw new ApiError(400, "Invalid or expired reset token"); }
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user) throw new ApiError(404, "User not found");
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(password, 10) } });

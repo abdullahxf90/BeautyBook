@@ -134,12 +134,19 @@ router.post("/", validate(createSchema), asyncHandler(async (req, res) => {
 }));
 
 router.get("/mine", asyncHandler(async (req, res) => {
-  const bookings = await prisma.booking.findMany({
-    where: { userId: req.user!.id },
-    orderBy: { startAt: "desc" },
-    include: bookingInclude,
-  });
-  res.json({ bookings });
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+  const [total, bookings] = await Promise.all([
+    prisma.booking.count({ where: { userId: req.user!.id } }),
+    prisma.booking.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { startAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: bookingInclude,
+    }),
+  ]);
+  res.json({ bookings, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
 }));
 
 router.post("/:id/cancel", asyncHandler(async (req, res) => {
@@ -148,20 +155,22 @@ router.post("/:id/cancel", asyncHandler(async (req, res) => {
   if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {
     throw new ApiError(400, "Only upcoming bookings can be cancelled");
   }
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: {
-      status: "CANCELLED",
-      payment: { update: { status: booking.paymentMethod === "CASH" ? "FAILED" : "REFUNDED" } },
-    },
-    include: bookingInclude,
-  });
-  await prisma.bookingTracking.create({
-    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "CANCELLED", changedBy: req.user!.id, reason: "Cancelled by customer" },
-  });
-  await prisma.notification.create({
-    data: { userId: req.user!.id, title: "Booking cancelled", body: `Booking ${booking.code} has been cancelled.` },
-  });
+  const [updated] = await prisma.$transaction([
+    prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: "CANCELLED",
+        payment: { update: { status: booking.paymentMethod === "CASH" ? "FAILED" : "REFUNDED" } },
+      },
+      include: bookingInclude,
+    }),
+    prisma.bookingTracking.create({
+      data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "CANCELLED", changedBy: req.user!.id, reason: "Cancelled by customer" },
+    }),
+    prisma.notification.create({
+      data: { userId: req.user!.id, title: "Booking cancelled", body: `Booking ${booking.code} has been cancelled.` },
+    }),
+  ]);
   res.json({ booking: updated });
 }));
 
@@ -181,14 +190,12 @@ router.post("/:id/reschedule", validate(rescheduleSchema), asyncHandler(async (r
   const startAt = new Date(`${date}T00:00:00`);
   startAt.setHours(hh, mm, 0, 0);
   if (startAt <= new Date()) throw new ApiError(400, "Cannot reschedule to a time in the past");
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: { startAt },
-    include: bookingInclude,
-  });
-  await prisma.bookingTracking.create({
-    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: booking.status, changedBy: req.user!.id, reason: `Rescheduled to ${date} ${time}` },
-  });
+  const [updated] = await prisma.$transaction([
+    prisma.booking.update({ where: { id: booking.id }, data: { startAt }, include: bookingInclude }),
+    prisma.bookingTracking.create({
+      data: { bookingId: booking.id, fromStatus: booking.status, toStatus: booking.status, changedBy: req.user!.id, reason: `Rescheduled to ${date} ${time}` },
+    }),
+  ]);
   res.json({ booking: updated });
 }));
 
@@ -200,67 +207,58 @@ router.post("/:id/complete", requireRole("OWNER", "ADMIN"), asyncHandler(async (
     throw new ApiError(400, "Booking cannot be completed from its current status");
   }
   const points = Math.floor(booking.total / 100);
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: { status: "COMPLETED", payment: { update: { status: "PAID" } } },
-    include: bookingInclude,
-  });
-  await prisma.bookingTracking.create({
-    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "COMPLETED", changedBy: req.user!.id, reason: "Marked completed" },
-  });
-  await prisma.user.update({ where: { id: booking.userId }, data: { loyaltyPoints: { increment: points } } });
-  await prisma.loyaltyTransaction.create({
-    data: { userId: booking.userId, points, reason: "Completed booking", bookingId: booking.id },
-  });
-  await prisma.notification.create({
-    data: { userId: booking.userId, title: "Thanks for visiting!", body: `You earned ${points} loyalty points. Leave a review to help others glow.` },
-  });
+  const [updated] = await prisma.$transaction([
+    prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: "COMPLETED", payment: { update: { status: "PAID" } } },
+      include: bookingInclude,
+    }),
+    prisma.bookingTracking.create({
+      data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "COMPLETED", changedBy: req.user!.id, reason: "Marked completed" },
+    }),
+    prisma.user.update({ where: { id: booking.userId }, data: { loyaltyPoints: { increment: points } } }),
+    prisma.loyaltyTransaction.create({
+      data: { userId: booking.userId, points, reason: "Completed booking", bookingId: booking.id },
+    }),
+    prisma.notification.create({
+      data: { userId: booking.userId, title: "Thanks for visiting!", body: `You earned ${points} loyalty points. Leave a review to help others glow.` },
+    }),
+  ]);
   res.json({ booking: updated });
 }));
 
 // ── Booking lifecycle extensions ──
 
-// Check-in
 router.put("/:id/check-in", asyncHandler(async (req, res) => {
   const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
   if (!booking) throw new ApiError(404, "Booking not found");
   if (booking.status !== "CONFIRMED") throw new ApiError(400, "Booking must be CONFIRMED to check in");
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: { status: "ARRIVED", checkInAt: new Date() },
-  });
+  const updated = await prisma.booking.update({ where: { id: booking.id }, data: { status: "ARRIVED", checkInAt: new Date() } });
   await prisma.bookingTracking.create({
     data: { bookingId: booking.id, fromStatus: "CONFIRMED", toStatus: "ARRIVED", changedBy: req.user!.id },
   });
   res.json({ booking: updated });
 }));
 
-// Check-out
 router.put("/:id/check-out", asyncHandler(async (req, res) => {
   const booking = await prisma.booking.findUnique({ where: { id: req.params.id }, include: { items: true } });
   if (!booking) throw new ApiError(404, "Booking not found");
   if (booking.status !== "IN_PROGRESS" && booking.status !== "ARRIVED") throw new ApiError(400, "Booking must be in progress to check out");
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: { status: "COMPLETED", checkOutAt: new Date(), endAt: new Date() },
-  });
-  await prisma.bookingTracking.create({
-    data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "COMPLETED", changedBy: req.user!.id },
-  });
+  const [updated] = await prisma.$transaction([
+    prisma.booking.update({ where: { id: booking.id }, data: { status: "COMPLETED", checkOutAt: new Date(), endAt: new Date() } }),
+    prisma.bookingTracking.create({ data: { bookingId: booking.id, fromStatus: booking.status, toStatus: "COMPLETED", changedBy: req.user!.id } }),
+  ]) as any;
   res.json({ booking: updated });
 }));
 
-// Start booking (in progress)
 router.put("/:id/start", asyncHandler(async (req, res) => {
   const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
   if (!booking) throw new ApiError(404, "Booking not found");
   if (booking.status !== "ARRIVED") throw new ApiError(400, "Customer must be checked in first");
-  const updated = await prisma.booking.update({
-    where: { id: booking.id }, data: { status: "IN_PROGRESS" },
-  });
-  await prisma.bookingTracking.create({
-    data: { bookingId: booking.id, fromStatus: "ARRIVED", toStatus: "IN_PROGRESS", changedBy: req.user!.id },
-  });
+  const [updated] = await prisma.$transaction([
+    prisma.booking.update({ where: { id: booking.id }, data: { status: "IN_PROGRESS" } }),
+    prisma.bookingTracking.create({ data: { bookingId: booking.id, fromStatus: "ARRIVED", toStatus: "IN_PROGRESS", changedBy: req.user!.id } }),
+  ]) as any;
   res.json({ booking: updated });
 }));
 
