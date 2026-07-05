@@ -6,6 +6,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { api, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLive } from "@/lib/useLive";
 
 const serif = "'Cormorant Garamond',serif";
 
@@ -15,6 +16,93 @@ interface OwnerSalon { id: string; name: string; slug: string; phone: string; em
 interface OwnerService { id: string; name: string; description: string | null; price: number; durationMin: number; active: boolean; category: { name: string } }
 interface OwnerEmployee { id: string; name: string; title: string; active: boolean }
 interface OwnerBooking { id: string; code: string; startAt: string; status: string; total: number; items: { name: string; price: number }[]; user: { name: string; phone: string }; salon: { name: string } }
+
+function RegisterSalonForm({ onRegistered }: { onRegistered: () => void }) {
+  const { token, adoptTokens } = useAuth();
+  const [cities, setCities] = useState<{ id: string; name: string }[]>([]);
+  const [areas, setAreas] = useState<{ id: string; name: string }[]>([]);
+  const [form, setForm] = useState({ name: "", description: "", phone: "", address: "", cityId: "", areaId: "", gender: "UNISEX" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  useEffect(() => {
+    api<{ cities: { id: string; name: string }[] }>("/api/locations/cities")
+      .then((r) => setCities(r.cities))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!form.cityId) return setAreas([]);
+    api<{ areas: { id: string; name: string }[] }>(`/api/locations/areas?cityId=${form.cityId}`)
+      .then((r) => setAreas(r.areas))
+      .catch(() => setAreas([]));
+  }, [form.cityId]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await api<{ salon: { id: string }; accessToken?: string; refreshToken?: string }>("/api/salons/register", {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: form.name,
+          description: form.description,
+          phone: form.phone,
+          address: form.address,
+          areaId: form.areaId,
+          gender: form.gender,
+        }),
+      });
+      if (res.accessToken && res.refreshToken) await adoptTokens(res.accessToken, res.refreshToken);
+      onRegistered();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not register salon");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selectStyle = { padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(28,28,28,.12)", background: "#fff", fontSize: 14 };
+
+  return (
+    <div style={{ maxWidth: 560, margin: "48px auto 0" }}>
+      <div style={{ textAlign: "center" }}>
+        <h2 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(28px,4vw,40px)" }}>List your salon</h2>
+        <p style={{ fontSize: 15, color: "#5a5457", marginTop: 8 }}>Tell us about your business. Our team reviews every application before it goes live.</p>
+      </div>
+      <form onSubmit={submit} style={{ marginTop: 26, display: "flex", flexDirection: "column", gap: 14, background: "#fff", padding: 30, borderRadius: 24, border: "1px solid rgba(28,28,28,.06)", boxShadow: "0 24px 60px -36px rgba(28,28,28,.35)" }}>
+        <input className="bb-input" placeholder="Salon name" value={form.name} onChange={set("name")} required minLength={2} aria-label="Salon name" />
+        <textarea className="bb-input" placeholder="Describe your salon, services and what makes it special (min 10 characters)" value={form.description} onChange={set("description")} required minLength={10} rows={4} aria-label="Description" style={{ resize: "vertical", fontFamily: "inherit" }} />
+        <input className="bb-input" type="tel" placeholder="Business phone (e.g. 03001234567)" value={form.phone} onChange={set("phone")} required minLength={10} aria-label="Business phone" />
+        <input className="bb-input" placeholder="Street address" value={form.address} onChange={set("address")} required minLength={5} aria-label="Address" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <select value={form.cityId} onChange={set("cityId")} required aria-label="City" style={selectStyle}>
+            <option value="">City</option>
+            {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={form.areaId} onChange={set("areaId")} required aria-label="Area" style={selectStyle} disabled={!form.cityId}>
+            <option value="">Area</option>
+            {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+        <select value={form.gender} onChange={set("gender")} aria-label="Clientele" style={selectStyle}>
+          <option value="UNISEX">Unisex</option>
+          <option value="FEMALE">Ladies only</option>
+          <option value="MALE">Gents only</option>
+        </select>
+        {error && <p style={{ fontSize: 13, color: "#a33" }}>{error}</p>}
+        <button type="submit" disabled={busy} className="bb-btn" style={{ marginTop: 6, padding: "14px 0", borderRadius: 16, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 15, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+          {busy ? "Submitting…" : "Submit for review"}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export default function SalonDashboardPage() {
   const { user, token, loading } = useAuth();
@@ -32,8 +120,10 @@ export default function SalonDashboardPage() {
   const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([]);
 
   useEffect(() => {
-    if (!loading && (!user || (user.role !== "OWNER" && user.role !== "ADMIN" && user.role !== "SUPER_ADMIN"))) {
-      router.push("/");
+    // Logged-in customers may view this page to submit a partner application;
+    // registering their first salon upgrades them to OWNER.
+    if (!loading && !user) {
+      router.push("/login?next=/salon-dashboard");
     }
   }, [loading, user, router]);
 
@@ -64,6 +154,7 @@ export default function SalonDashboardPage() {
   }, [token, selectedSalon]);
 
   useEffect(() => { void loadDetails(); }, [loadDetails]);
+  useLive(loadDetails, 15000);
 
   const addService = async () => {
     if (!token || !selectedSalon) return;
@@ -131,9 +222,7 @@ export default function SalonDashboardPage() {
         </div>
 
         {salons.length === 0 ? (
-          <div style={{ marginTop: 48, textAlign: "center", padding: "60px 0" }}>
-            <p style={{ fontSize: 16, color: "#5a5457" }}>You don&apos;t have any salons listed yet. <a href="/partner" style={{ color: "#B06A85" }}>List your salon</a></p>
-          </div>
+          <RegisterSalonForm onRegistered={() => void loadSalons()} />
         ) : (
           <>
             <div style={{ display: "flex", gap: 8, marginTop: 24, flexWrap: "wrap", borderBottom: "1px solid rgba(28,28,28,.08)", paddingBottom: 14 }}>

@@ -10,9 +10,10 @@ interface AuthState {
   login: (email: string, password: string) => Promise<{ requiresTwoFactor: boolean; challengeToken?: string }>;
   verifyTwoFactor: (challengeToken: string, code: string) => Promise<void>;
   socialLogin: (provider: "GOOGLE" | "FACEBOOK" | "APPLE", providerToken: string) => Promise<void>;
-  register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone?: string, role?: "CUSTOMER" | "OWNER") => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  adoptTokens: (accessToken: string, refreshToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -92,12 +93,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     applySession(res.user, res.accessToken, res.refreshToken);
   }, [applySession]);
 
-  const register = useCallback(async (name: string, email: string, password: string, phone?: string) => {
+  const register = useCallback(async (name: string, email: string, password: string, phone?: string, role?: "CUSTOMER" | "OWNER") => {
     const res = await api<{ user: UserInfo; accessToken: string; refreshToken: string }>("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({ name, email, password, phone: phone || undefined }),
+      body: JSON.stringify({ name, email, password, phone: phone || undefined, role }),
     });
     applySession(res.user, res.accessToken, res.refreshToken);
+  }, [applySession]);
+
+  // Adopt tokens issued mid-session (e.g. after a role upgrade) and reload the user
+  const adoptTokens = useCallback(async (accessToken: string, refreshToken: string) => {
+    const { user: u } = await api<{ user: UserInfo }>("/api/auth/me", { token: accessToken });
+    applySession(u, accessToken, refreshToken);
   }, [applySession]);
 
   const logout = useCallback(async () => {
@@ -118,8 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   const value = useMemo(
-    () => ({ user, token, loading, login, verifyTwoFactor, socialLogin, register, logout, refreshUser }),
-    [user, token, loading, login, verifyTwoFactor, socialLogin, register, logout, refreshUser],
+    () => ({ user, token, loading, login, verifyTwoFactor, socialLogin, register, logout, refreshUser, adoptTokens }),
+    [user, token, loading, login, verifyTwoFactor, socialLogin, register, logout, refreshUser, adoptTokens],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

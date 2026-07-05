@@ -7,6 +7,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLive } from "@/lib/useLive";
 
 const serif = "'Cormorant Garamond',serif";
 
@@ -28,6 +29,7 @@ export default function NotificationsPage() {
   }, [token]);
 
   useEffect(() => { void load(); }, [load]);
+  useLive(load, 20000);
 
   const markAllRead = async () => {
     if (!token) return;

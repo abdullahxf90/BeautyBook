@@ -24,7 +24,7 @@ export default function PartnerPage() {
             Join Pakistan&apos;s premium beauty marketplace. Manage bookings, showcase your work, and build a reputation that shines.
           </p>
           <Link
-            href="/signup"
+            href="/signup?role=owner&next=/salon-dashboard"
             className="bb-btn"
             style={{ display: "inline-block", marginTop: 30, borderRadius: 20, background: "#1C1C1C", color: "#FAF8F7", fontSize: 15, fontWeight: 600, padding: "15px 32px", textDecoration: "none", boxShadow: "0 8px 20px rgba(28,28,28,.2)" }}
           >

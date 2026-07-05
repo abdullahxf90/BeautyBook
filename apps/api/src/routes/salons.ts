@@ -3,6 +3,9 @@ import { z } from "zod";
 import { Prisma, prisma } from "@beautybook/database";
 import { ApiError, asyncHandler } from "../utils/http";
 import { getValidated, validate } from "../middleware/validate";
+import { requireAuth } from "../middleware/auth";
+import { signAccessToken, signRefreshToken } from "../utils/jwt";
+import { config } from "../config";
 
 const router = Router();
 
@@ -26,7 +29,7 @@ const listSchema = z.object({
 router.get("/", validate(listSchema, "query"), asyncHandler(async (req, res) => {
   const f = getValidated<z.infer<typeof listSchema>>(req);
 
-  const where: Prisma.SalonWhereInput = {};
+  const where: Prisma.SalonWhereInput = { listed: true };
   if (f.q) {
     where.OR = [
       { name: { contains: f.q, mode: "insensitive" } },
@@ -157,7 +160,7 @@ router.get("/:slug/slots", validate(slotsSchema, "query"), asyncHandler(async (r
 
 router.get("/map-data", asyncHandler(async (req, res) => {
   const { city, area, lat, lng, radius } = req.query;
-  const where: any = { latitude: { not: null }, longitude: { not: null } };
+  const where: any = { listed: true, latitude: { not: null }, longitude: { not: null } };
   if (city) where.area = { city: { name: { equals: city as string, mode: "insensitive" } } };
   if (area) where.area = { name: { equals: area as string, mode: "insensitive" } };
   let salons = await prisma.salon.findMany({
@@ -181,6 +184,80 @@ router.get("/map-data", asyncHandler(async (req, res) => {
   }
   const markers = salons.map((s) => ({ ...s, image: s.images[0]?.url || null, images: undefined }));
   res.json({ markers, total: markers.length });
+}));
+
+// ── Partner salon registration ──────────────────
+
+const registerSalonSchema = z.object({
+  name: z.string().min(2).max(100),
+  description: z.string().min(10).max(2000),
+  phone: z.string().min(10).max(16),
+  address: z.string().min(5).max(300),
+  areaId: z.string().min(1),
+  email: z.string().email().optional(),
+  gender: z.enum(["MALE", "FEMALE", "UNISEX"]).default("UNISEX"),
+  homeService: z.boolean().optional(),
+});
+
+function slugify(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+}
+
+router.post("/register", requireAuth, validate(registerSalonSchema), asyncHandler(async (req, res) => {
+  const data = getValidated<z.infer<typeof registerSalonSchema>>(req);
+  const area = await prisma.area.findUnique({ where: { id: data.areaId }, include: { city: true } });
+  if (!area) throw new ApiError(400, "Invalid area");
+
+  const base = slugify(data.name) || "salon";
+  let slug = base;
+  for (let i = 2; await prisma.salon.findUnique({ where: { slug }, select: { id: true } }); i++) {
+    slug = `${base}-${i}`;
+  }
+
+  const salon = await prisma.salon.create({
+    data: {
+      slug,
+      name: data.name,
+      description: data.description,
+      phone: data.phone,
+      address: data.address,
+      areaId: data.areaId,
+      cityId: area.cityId,
+      email: data.email,
+      gender: data.gender,
+      homeService: data.homeService ?? false,
+      ownerId: req.user!.id,
+      verified: false,
+      listed: false, // hidden from search until an admin approves the application
+    },
+    include: { area: { include: { city: true } } },
+  });
+
+  // First salon upgrades a customer to a partner account; new tokens carry the new role
+  let tokens: { accessToken: string; refreshToken: string } | undefined;
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (user && user.role === "CUSTOMER") {
+    await prisma.user.update({ where: { id: user.id }, data: { role: "OWNER" } });
+    const accessToken = signAccessToken({ sub: user.id, role: "OWNER" });
+    const refreshToken = signRefreshToken({ sub: user.id, role: "OWNER" });
+    const expiresAt = new Date(Date.now() + config.refreshTokenTtlDays * 24 * 3600 * 1000);
+    await prisma.refreshToken.create({ data: { token: refreshToken, userId: user.id, expiresAt } });
+    tokens = { accessToken, refreshToken };
+  }
+
+  await prisma.notification.create({
+    data: {
+      userId: req.user!.id,
+      title: "Partner application received",
+      body: `${data.name} has been submitted for review. We'll notify you once it's approved and live.`,
+      type: "SALON",
+    },
+  });
+  await prisma.auditLog.create({
+    data: { userId: req.user!.id, action: "SALON_REGISTERED", entity: "Salon", entityId: salon.id },
+  });
+
+  res.status(201).json({ salon, ...tokens });
 }));
 
 export default router;

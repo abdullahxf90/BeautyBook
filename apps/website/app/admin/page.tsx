@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { useEffect, useState, useCallback } from "react";
+import { useLive } from "@/lib/useLive";
 
 type Tab =
   | "dashboard" | "users" | "salons" | "bookings" | "payments"
@@ -129,6 +130,7 @@ function AdminDashboardSection({ token, active }: { token: string; active: boole
     try { const r = await api<any>(`/api/admin/dashboard`, { headers: { Authorization: `Bearer ${token}` } }); setData(r); } catch {}
   }, [active, token]);
   useEffect(() => { fetch(); }, [fetch]);
+  useLive(fetch, 20000);
   if (!active || !data) return null;
   const stats = [
     { label: "Total Users", value: data.totalUsers?.toLocaleString() },

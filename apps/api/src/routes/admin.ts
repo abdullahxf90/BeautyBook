@@ -254,7 +254,12 @@ router.get(
 router.patch(
   "/salons/:id/verify",
   asyncHandler(async (req, res) => {
-    const salon = await prisma.salon.update({ where: { id: req.params.id }, data: { verified: true } });
+    const salon = await prisma.salon.update({ where: { id: req.params.id }, data: { verified: true, listed: true } });
+    if (salon.ownerId) {
+      await prisma.notification.create({
+        data: { userId: salon.ownerId, title: "Your salon is live!", body: `${salon.name} has been approved and is now visible to customers on BeautyBook.`, type: "SALON" },
+      }).catch(() => {});
+    }
     await prisma.auditLog.create({ data: { userId: req.user!.id, action: "SALON_VERIFIED", entity: "Salon", entityId: salon.id } }).catch(() => {});
     res.json({ salon });
   }),

@@ -7,6 +7,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { api, BookingInfo, rupees, SalonSummary } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLive } from "@/lib/useLive";
 
 const serif = "'Cormorant Garamond',serif";
 type Tab = "bookings" | "favorites" | "notifications" | "profile";
@@ -58,6 +59,7 @@ export default function DashboardPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useLive(refresh, 15000);
 
   const cancel = async (id: string) => {
     if (!token) return;

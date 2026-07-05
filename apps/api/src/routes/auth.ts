@@ -105,6 +105,8 @@ const registerSchema = z.object({
   email: z.string().email(),
   phone: z.string().min(10).max(16).optional(),
   password: z.string().min(8).max(100),
+  // Only customer/partner self-registration; staff/admin accounts are provisioned internally
+  role: z.enum(["CUSTOMER", "OWNER"]).optional(),
 });
 
 router.post("/register", validate(registerSchema), asyncHandler(async (req, res) => {
@@ -117,6 +119,7 @@ router.post("/register", validate(registerSchema), asyncHandler(async (req, res)
       email: data.email,
       phone: data.phone,
       passwordHash: await bcrypt.hash(data.password, 10),
+      role: data.role ?? "CUSTOMER",
     },
   });
   await prisma.notification.create({

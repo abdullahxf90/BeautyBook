@@ -2,13 +2,29 @@ import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-// Supabase's session-mode pooler has a small per-user connection cap; without an
-// explicit limit Prisma opens num_cpus*2+1 connections and heavy Promise.all
-// fan-outs (admin dashboard, analytics) intermittently fail with P1001.
+// Supabase's session-mode pooler (port 5432) is hard-capped at 15 clients and
+// leaked dev-server sessions exhaust it (EMAXCONNSESSION). Route through the
+// transaction-mode pooler (port 6543, pgbouncer) instead, which multiplexes
+// connections, and cap Prisma's own pool so Promise.all fan-outs queue rather
+// than opening new connections.
 function pooledUrl(): string | undefined {
-  const url = process.env.DATABASE_URL;
-  if (!url || url.includes("connection_limit=")) return url;
-  return url + (url.includes("?") ? "&" : "?") + "connection_limit=5&pool_timeout=30&connect_timeout=30";
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return raw;
+  try {
+    const url = new URL(raw);
+    if (url.hostname.endsWith("pooler.supabase.com") && url.port === "5432") {
+      url.port = "6543";
+      if (!url.searchParams.has("pgbouncer")) url.searchParams.set("pgbouncer", "true");
+    }
+    if (!url.searchParams.has("connection_limit")) {
+      url.searchParams.set("connection_limit", "5");
+      url.searchParams.set("pool_timeout", "30");
+      url.searchParams.set("connect_timeout", "30");
+    }
+    return url.toString();
+  } catch {
+    return raw;
+  }
 }
 
 export const prisma =

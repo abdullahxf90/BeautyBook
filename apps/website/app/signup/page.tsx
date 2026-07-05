@@ -21,13 +21,15 @@ function SignupForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const isPartner = params.get("role") === "owner";
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await register(name, email, password, phone || undefined);
-      router.push(params.get("next") || "/dashboard");
+      await register(name, email, password, phone || undefined, isPartner ? "OWNER" : undefined);
+      router.push(params.get("next") || (isPartner ? "/salon-dashboard" : "/dashboard"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
@@ -38,8 +40,8 @@ function SignupForm() {
   return (
     <div style={{ maxWidth: 440, margin: "0 auto", padding: "clamp(48px,9vh,110px) 24px 90px" }}>
       <div style={{ textAlign: "center" }}>
-        <h1 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(36px,5vw,52px)" }}>Create your account</h1>
-        <p style={{ fontSize: 15, color: "#5a5457", marginTop: 10 }}>Join Pakistan&apos;s beauty marketplace.</p>
+        <h1 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(36px,5vw,52px)" }}>{isPartner ? "Create your partner account" : "Create your account"}</h1>
+        <p style={{ fontSize: 15, color: "#5a5457", marginTop: 10 }}>{isPartner ? "List your salon and start taking bookings." : "Join Pakistan’s beauty marketplace."}</p>
       </div>
       <form onSubmit={submit} style={{ marginTop: 34, display: "flex", flexDirection: "column", gap: 14, background: "#fff", padding: 30, borderRadius: 24, border: "1px solid rgba(28,28,28,.06)", boxShadow: "0 24px 60px -36px rgba(28,28,28,.35)" }}>
         <input className="bb-input" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} required minLength={2} aria-label="Full name" />
