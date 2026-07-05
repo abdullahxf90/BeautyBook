@@ -37,6 +37,20 @@ export async function apiTry<T>(path: string, revalidate = 60): Promise<T | null
   }
 }
 
+/**
+ * Like apiTry, but distinguishes "the API said 404" from "the API is
+ * unreachable/errored" so pages can render a retry state instead of a wrong 404.
+ */
+export async function apiTryStatus<T>(path: string, revalidate = 60): Promise<{ data: T | null; status: number | null }> {
+  try {
+    const res = await fetch(`${API_URL}${path}`, { next: { revalidate } });
+    if (!res.ok) return { data: null, status: res.status };
+    return { data: (await res.json()) as T, status: res.status };
+  } catch {
+    return { data: null, status: null };
+  }
+}
+
 // ---- Shared types (mirror the API responses) ----
 export interface SalonSummary {
   id: string;

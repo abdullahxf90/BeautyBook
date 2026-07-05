@@ -362,20 +362,20 @@ export default async function HomePage() {
                 Book on the go, track your appointments, save your favourite artists, and unlock members-only offers.
               </p>
               <div style={{ display: "flex", gap: 14, marginTop: 28, flexWrap: "wrap" }}>
-                <a href="#" className="bb-btn" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "13px 22px", borderRadius: 18, background: "#1C1C1C", color: "#FAF8F7" }}>
+                <Link href="/signup" title="Mobile apps coming soon — book on the web today" className="bb-btn" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "13px 22px", borderRadius: 18, background: "#1C1C1C", color: "#FAF8F7" }}>
                   <span style={{ fontFamily: serif, fontSize: 20 }}></span>
                   <span>
                     <span style={{ fontSize: 11, display: "block", opacity: 0.7 }}>Download on the</span>
                     <span style={{ fontSize: 15, fontWeight: 600 }}>App Store</span>
                   </span>
-                </a>
-                <a href="#" className="bb-btn" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "13px 22px", borderRadius: 18, background: "#1C1C1C", color: "#FAF8F7" }}>
+                </Link>
+                <Link href="/signup" title="Mobile apps coming soon — book on the web today" className="bb-btn" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, padding: "13px 22px", borderRadius: 18, background: "#1C1C1C", color: "#FAF8F7" }}>
                   <span style={{ fontSize: 16 }}>▶</span>
                   <span>
                     <span style={{ fontSize: 11, display: "block", opacity: 0.7 }}>Get it on</span>
                     <span style={{ fontSize: 15, fontWeight: 600 }}>Google Play</span>
                   </span>
-                </a>
+                </Link>
               </div>
             </Reveal>
             <Reveal style={{ display: "flex", justifyContent: "center" }}>

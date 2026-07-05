@@ -4,35 +4,34 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 
-const navLinks: Array<{ label: string; href: string; children?: Array<{ label: string; href: string }> }> = [
+const navLinks: Array<{ label: string; href: string }> = [
   { label: "Home", href: "/" },
   { label: "Explore", href: "/explore" },
   { label: "Services", href: "/services" },
   { label: "Offers", href: "/offers" },
-  {
-    label: "More",
-    href: "#",
-    children: [
-      { label: "Blog", href: "/blog" },
-      { label: "Beauty Tips", href: "/tips" },
-      { label: "Gift Cards", href: "/gift-cards" },
-      { label: "Smart Search", href: "/smart-search" },
-      { label: "Memberships", href: "/memberships" },
-      { label: "AI Assistant", href: "/ai-assistant" },
-      { label: "Chat", href: "/chat" },
-      { label: "Support", href: "/support" },
-    ],
-  },
   { label: "Become a Partner", href: "/partner" },
   { label: "About", href: "/about" },
 ];
 
+// Formerly hidden inside a "More" dropdown — now always visible in a strip
+// below the top bar so every visitor discovers these sections.
+const quickLinks: Array<{ label: string; href: string }> = [
+  { label: "Smart Search", href: "/smart-search" },
+  { label: "Gift Cards", href: "/gift-cards" },
+  { label: "Memberships", href: "/memberships" },
+  { label: "AI Assistant", href: "/ai-assistant" },
+  { label: "Blog", href: "/blog" },
+  { label: "Beauty Tips", href: "/tips" },
+  { label: "Chat", href: "/chat" },
+  { label: "Support", href: "/support" },
+];
+
 export default function Nav() {
   const { user, logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
+    <>
     <nav
       style={{
         position: "sticky",
@@ -65,30 +64,11 @@ export default function Nav() {
 
       {/* Desktop nav */}
       <div className="bb-nav-links" style={{ display: "flex", alignItems: "center", gap: 24 }}>
-        {navLinks.map((item) =>
-          item.children ? (
-            <div key={item.label} style={{ position: "relative" }}>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                onBlur={() => setTimeout(() => setMenuOpen(false), 200)}
-                style={{ fontSize: 14, fontWeight: 500, color: "#4a4446", background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                {item.label} ▾
-              </button>
-              {menuOpen && (
-                <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 8, background: "#fff", borderRadius: 16, border: "1px solid rgba(28,28,28,.08)", boxShadow: "0 20px 50px -20px rgba(28,28,28,.3)", padding: 8, minWidth: 180, zIndex: 50 }}>
-                  {item.children.map(c => (
-                    <Link key={c.label} href={c.href} className="bb-navlink" style={{ display: "block", fontSize: 14, fontWeight: 500, color: "#4a4446", textDecoration: "none", padding: "10px 14px", borderRadius: 10 }}>{c.label}</Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <Link key={item.label} href={item.href} className="bb-navlink" style={{ fontSize: 14, fontWeight: 500, color: "#4a4446", textDecoration: "none", whiteSpace: "nowrap" }}>
-              {item.label}
-            </Link>
-          )
-        )}
+        {navLinks.map((item) => (
+          <Link key={item.label} href={item.href} className="bb-navlink" style={{ fontSize: 14, fontWeight: 500, color: "#4a4446", textDecoration: "none", whiteSpace: "nowrap" }}>
+            {item.label}
+          </Link>
+        ))}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -124,13 +104,9 @@ export default function Nav() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div style={{ position: "fixed", inset: 0, top: 72, background: "#FAF8F7", zIndex: 39, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-          {navLinks.map(item => (
-            item.children ? item.children.map(c => (
-              <Link key={c.label} href={c.href} onClick={() => setMobileOpen(false)} style={{ fontSize: 16, fontWeight: 500, color: "#1C1C1C", textDecoration: "none" }}>{c.label}</Link>
-            )) : (
-              <Link key={item.label} href={item.href} onClick={() => setMobileOpen(false)} style={{ fontSize: 16, fontWeight: 500, color: "#1C1C1C", textDecoration: "none" }}>{item.label}</Link>
-            )
+        <div style={{ position: "fixed", inset: 0, top: 72, background: "#FAF8F7", zIndex: 39, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+          {[...navLinks, ...quickLinks].map(item => (
+            <Link key={item.label} href={item.href} onClick={() => setMobileOpen(false)} style={{ fontSize: 16, fontWeight: 500, color: "#1C1C1C", textDecoration: "none" }}>{item.label}</Link>
           ))}
           {user?.role === "STAFF" && (
             <Link href="/staff" onClick={() => setMobileOpen(false)} style={{ fontSize: 16, fontWeight: 500, color: "#B06A85", textDecoration: "none" }}>Staff Dashboard</Link>
@@ -138,5 +114,42 @@ export default function Nav() {
         </div>
       )}
     </nav>
+
+    {/* Quick links — always visible, scrolls with the page (not part of the sticky bar) */}
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        gap: 10,
+        padding: "10px clamp(24px,5vw,72px)",
+        background: "rgba(235,200,211,.16)",
+        borderBottom: "1px solid rgba(28,28,28,.05)",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      {quickLinks.map((item) => (
+        <Link
+          key={item.label}
+          href={item.href}
+          className="bb-navlink"
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "#4a4446",
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+            padding: "7px 14px",
+            borderRadius: 16,
+            background: "rgba(255,255,255,.75)",
+            border: "1px solid rgba(28,28,28,.07)",
+          }}
+        >
+          {item.label}
+        </Link>
+      ))}
+    </div>
+    </>
   );
 }

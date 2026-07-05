@@ -4,7 +4,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 import FavoriteButton from "@/components/FavoriteButton";
-import { apiTry, ReviewInfo, rupees, SalonDetail } from "@/lib/api";
+import { apiTry, apiTryStatus, ReviewInfo, rupees, SalonDetail } from "@/lib/api";
 
 const serif = "'Cormorant Garamond',serif";
 const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -12,11 +12,30 @@ const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${
 
 export default async function SalonPage({ params }: { params: { slug: string } }) {
   const [detail, reviewsRes] = await Promise.all([
-    apiTry<{ salon: SalonDetail }>(`/api/salons/${params.slug}`, 30),
+    apiTryStatus<{ salon: SalonDetail }>(`/api/salons/${params.slug}`, 30),
     apiTry<{ reviews: ReviewInfo[] }>(`/api/salons/${params.slug}/reviews`, 30),
   ]);
-  if (!detail?.salon) notFound();
-  const salon = detail.salon;
+  // Only a confirmed 404 from the API means the salon doesn't exist;
+  // a transient API/DB failure should not masquerade as a missing page.
+  if (detail.status === 404) notFound();
+  if (!detail.data?.salon) {
+    return (
+      <>
+        <Nav />
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "clamp(64px,12vh,140px) 24px 100px", textAlign: "center" }}>
+          <h1 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(32px,5vw,52px)" }}>Just a moment…</h1>
+          <p style={{ fontSize: 16, lineHeight: 1.6, color: "#5a5457", marginTop: 16 }}>
+            We couldn&apos;t reach this salon&apos;s details right now. Please refresh the page or try again shortly.
+          </p>
+          <Link href={`/salon/${params.slug}`} className="bb-btn" style={{ display: "inline-block", marginTop: 28, borderRadius: 20, background: "#1C1C1C", color: "#FAF8F7", fontSize: 15, fontWeight: 600, padding: "14px 30px", textDecoration: "none" }}>
+            Try again
+          </Link>
+        </div>
+        <Footer />
+      </>
+    );
+  }
+  const salon = detail.data.salon;
   const reviews = reviewsRes?.reviews || [];
 
   return (

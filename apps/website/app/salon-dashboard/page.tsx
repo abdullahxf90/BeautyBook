@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
-import { api, rupees } from "@/lib/api";
+import { api, API_URL, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLive } from "@/lib/useLive";
 
@@ -16,6 +16,18 @@ interface OwnerSalon { id: string; name: string; slug: string; phone: string; em
 interface OwnerService { id: string; name: string; description: string | null; price: number; durationMin: number; active: boolean; category: { name: string } }
 interface OwnerEmployee { id: string; name: string; title: string; active: boolean }
 interface OwnerBooking { id: string; code: string; startAt: string; status: string; total: number; items: { name: string; price: number }[]; user: { name: string; phone: string }; salon: { name: string } }
+interface WorkingHour { dayOfWeek: number; openMin: number; closeMin: number; closed: boolean }
+interface SalonImage { id: string; url: string; alt: string | null }
+interface SalonVerification { status: string; cnicNumber: string | null; licenseNumber: string | null; taxNumber: string | null }
+interface CrmCustomerRow { id: string; name: string | null; phone: string | null; totalVisits: number; lastVisitAt: string | null }
+interface ProductRow { id: string; name: string; sku: string | null; minStock: number | null; inventory: { quantity: number }[] }
+interface CampaignRow { id: string; name: string; status: string; sent: number | null }
+interface PromotionRow { id: string; title: string; active: boolean }
+interface OfferRow { id: string; title: string; active: boolean }
+
+const minToTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const timeToMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
+const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function RegisterSalonForm({ onRegistered }: { onRegistered: () => void }) {
   const { token, adoptTokens } = useAuth();
@@ -118,6 +130,21 @@ export default function SalonDashboardPage() {
   const [newSvc, setNewSvc] = useState({ name: "", price: "", durationMin: "30", categoryId: "" });
   const [newEmp, setNewEmp] = useState({ name: "", title: "" });
   const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [hoursDraft, setHoursDraft] = useState<WorkingHour[]>([]);
+  const [images, setImages] = useState<SalonImage[]>([]);
+  const [verification, setVerification] = useState<SalonVerification | null>(null);
+  const [verifForm, setVerifForm] = useState({ cnicNumber: "", licenseNumber: "", taxNumber: "" });
+  const [uploading, setUploading] = useState(false);
+  const [crmCustomers, setCrmCustomers] = useState<CrmCustomerRow[]>([]);
+  const [crmStats, setCrmStats] = useState<{ total: number; repeat: number; avgVisits: number }>({ total: 0, repeat: 0, avgVisits: 0 });
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [newProd, setNewProd] = useState({ name: "", sku: "", qty: "" });
+  const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
+  const [promotions, setPromotions] = useState<PromotionRow[]>([]);
+  const [offersList, setOffersList] = useState<OfferRow[]>([]);
+  const [newCampaign, setNewCampaign] = useState("");
+  const [newPromo, setNewPromo] = useState("");
+  const [newOffer, setNewOffer] = useState("");
 
   useEffect(() => {
     // Logged-in customers may view this page to submit a partner application;
@@ -142,15 +169,35 @@ export default function SalonDashboardPage() {
 
   const loadDetails = useCallback(async () => {
     if (!token || !selectedSalon) return;
-    const [svcRes, bkRes, anRes] = await Promise.all([
-      api<{ salon: { services: OwnerService[]; employees: OwnerEmployee[] } }>(`/api/owner/salons/${selectedSalon}`, { token }).catch(() => ({ salon: { services: [], employees: [] } })),
+    const [svcRes, bkRes, anRes, crmRes, invRes, campRes, promRes, offerRes] = await Promise.all([
+      api<{ salon: { services: OwnerService[]; employees: OwnerEmployee[]; workingHours: WorkingHour[]; images: SalonImage[]; verification: SalonVerification | null } }>(`/api/owner/salons/${selectedSalon}`, { token }).catch(() => ({ salon: { services: [], employees: [], workingHours: [], images: [], verification: null } })),
       api<{ bookings: OwnerBooking[] }>("/api/owner/bookings", { token }).catch(() => ({ bookings: [] })),
       api<{ analytics: Record<string, any> }>("/api/owner/analytics", { token }).catch(() => ({ analytics: {} })),
+      api<{ customers: CrmCustomerRow[]; total: number }>(`/api/crm/customers?salonId=${selectedSalon}&limit=50`, { token }).catch(() => ({ customers: [], total: 0 })),
+      api<{ products: ProductRow[] }>(`/api/inventory/products?salonId=${selectedSalon}&limit=50`, { token }).catch(() => ({ products: [] })),
+      api<{ campaigns: CampaignRow[] }>(`/api/marketing/campaigns?salonId=${selectedSalon}`, { token }).catch(() => ({ campaigns: [] })),
+      api<{ promotions: PromotionRow[] }>(`/api/marketing/promotions?salonId=${selectedSalon}`, { token }).catch(() => ({ promotions: [] })),
+      api<{ offers: OfferRow[] }>(`/api/marketing/offers?salonId=${selectedSalon}`, { token }).catch(() => ({ offers: [] })),
     ]);
     setServices(svcRes.salon.services);
     setEmployees(svcRes.salon.employees);
     setBookings(bkRes.bookings);
     setAnalytics(anRes.analytics);
+    setImages(svcRes.salon.images ?? []);
+    setVerification(svcRes.salon.verification ?? null);
+    setHoursDraft(
+      svcRes.salon.workingHours?.length
+        ? svcRes.salon.workingHours
+        : dayNames.map((_, i) => ({ dayOfWeek: i, openMin: 600, closeMin: 1260, closed: false })),
+    );
+    setCrmCustomers(crmRes.customers);
+    const repeat = crmRes.customers.filter((c) => c.totalVisits > 1).length;
+    const visits = crmRes.customers.reduce((s, c) => s + c.totalVisits, 0);
+    setCrmStats({ total: crmRes.total, repeat, avgVisits: crmRes.customers.length ? Math.round((visits / crmRes.customers.length) * 10) / 10 : 0 });
+    setProducts(invRes.products);
+    setCampaigns(campRes.campaigns);
+    setPromotions(promRes.promotions);
+    setOffersList(offerRes.offers);
   }, [token, selectedSalon]);
 
   useEffect(() => { void loadDetails(); }, [loadDetails]);
@@ -193,6 +240,117 @@ export default function SalonDashboardPage() {
   const completeBooking = async (id: string) => {
     if (!token) return;
     try { await api(`/api/bookings/${id}/complete`, { method: "POST", token }); setMsg("Booking completed."); await loadDetails(); } catch {}
+  };
+
+  const saveHours = async () => {
+    if (!token || !selectedSalon) return;
+    try {
+      await api(`/api/owner/salons/${selectedSalon}/hours`, { method: "PUT", token, body: JSON.stringify(hoursDraft) });
+      setMsg("Business hours saved.");
+      await loadDetails();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Failed to save hours"); }
+  };
+
+  const uploadPhotos = async (files: FileList | null) => {
+    if (!token || !selectedSalon || !files?.length) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      Array.from(files).forEach((f) => fd.append("images", f));
+      const res = await fetch(`${API_URL}/api/uploads/salon/${selectedSalon}/images`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Upload failed");
+      setMsg("Photos uploaded.");
+      await loadDetails();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Upload failed"); }
+    finally { setUploading(false); }
+  };
+
+  const deleteImage = async (imageId: string) => {
+    if (!token || !selectedSalon) return;
+    try {
+      await api(`/api/uploads/salon/${selectedSalon}/images/${imageId}`, { method: "DELETE", token });
+      setMsg("Photo removed.");
+      await loadDetails();
+    } catch {}
+  };
+
+  const submitVerification = async () => {
+    if (!token || !selectedSalon) return;
+    try {
+      await api(`/api/owner/salons/${selectedSalon}/verification`, {
+        method: "PUT", token,
+        body: JSON.stringify({
+          cnicNumber: verifForm.cnicNumber || undefined,
+          licenseNumber: verifForm.licenseNumber || undefined,
+          taxNumber: verifForm.taxNumber || undefined,
+        }),
+      });
+      setMsg("Verification submitted — our team will review it shortly.");
+      await loadDetails();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Failed to submit verification"); }
+  };
+
+  const addProduct = async () => {
+    if (!token || !selectedSalon || !newProd.name) return;
+    try {
+      const { product } = await api<{ product: { id: string } }>("/api/inventory/products", {
+        method: "POST", token,
+        body: JSON.stringify({ salonId: selectedSalon, name: newProd.name, sku: newProd.sku || undefined, unitPrice: 0, sellingPrice: 0, unit: "pcs", minStock: 5 }),
+      });
+      const qty = parseInt(newProd.qty) || 0;
+      if (qty > 0) {
+        await api(`/api/inventory/stock/${product.id}?salonId=${selectedSalon}`, { method: "PUT", token, body: JSON.stringify({ quantity: qty }) });
+      }
+      setMsg("Product added.");
+      setNewProd({ name: "", sku: "", qty: "" });
+      await loadDetails();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Failed to add product"); }
+  };
+
+  const createCampaign = async () => {
+    if (!token || !selectedSalon || !newCampaign) return;
+    try {
+      await api("/api/marketing/campaigns", { method: "POST", token, body: JSON.stringify({ salonId: selectedSalon, name: newCampaign, type: "PUSH", status: "DRAFT" }) });
+      setMsg("Campaign created as draft.");
+      setNewCampaign("");
+      await loadDetails();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Failed to create campaign"); }
+  };
+
+  const toggleCampaign = async (c: CampaignRow) => {
+    if (!token) return;
+    try {
+      await api(`/api/marketing/campaigns/${c.id}/status`, { method: "PUT", token, body: JSON.stringify({ status: c.status === "ACTIVE" ? "PAUSED" : "ACTIVE" }) });
+      await loadDetails();
+    } catch {}
+  };
+
+  const createPromotion = async () => {
+    if (!token || !selectedSalon || !newPromo) return;
+    const now = new Date();
+    const end = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+    try {
+      await api("/api/marketing/promotions", { method: "POST", token, body: JSON.stringify({ salonId: selectedSalon, title: newPromo, type: "PERCENTAGE", value: 10, startAt: now.toISOString(), endAt: end.toISOString() }) });
+      setMsg("Promotion added (10% off, 30 days — edit anytime).");
+      setNewPromo("");
+      await loadDetails();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Failed to add promotion"); }
+  };
+
+  const createOffer = async () => {
+    if (!token || !selectedSalon || !newOffer) return;
+    const now = new Date();
+    const end = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+    try {
+      await api("/api/marketing/offers", { method: "POST", token, body: JSON.stringify({ salonId: selectedSalon, title: newOffer, originalPrice: 0, offerPrice: 0, startAt: now.toISOString(), endAt: end.toISOString() }) });
+      setMsg("Offer added.");
+      setNewOffer("");
+      await loadDetails();
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Failed to add offer"); }
   };
 
   if (loading || !user) return null;
@@ -352,15 +510,24 @@ export default function SalonDashboardPage() {
             {tab === "hours" && (
               <div style={{ marginTop: 24, borderRadius: 20, background: "#fff", border: "1px solid rgba(28,28,28,.06)", padding: 24 }}>
                 <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>Business hours</h3>
-                <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>Manage your salon&apos;s working hours from the API.</p>
+                <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>Set your opening hours — customers only see slots inside them.</p>
                 <div style={{ marginTop: 16, fontSize: 14, color: "#4a4446" }}>
-                  {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, i) => (
-                    <div key={day} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(28,28,28,.05)" }}>
-                      <span style={{ fontWeight: 600 }}>{day}</span>
-                      <span>{i === 0 ? "12:00 PM â€“ 9:00 PM" : "10:00 AM â€“ 9:00 PM"}</span>
+                  {hoursDraft.map((h, i) => (
+                    <div key={h.dayOfWeek} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "8px 0", borderBottom: "1px solid rgba(28,28,28,.05)", flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 600, minWidth: 90 }}>{dayNames[h.dayOfWeek]}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input type="time" value={minToTime(h.openMin)} disabled={h.closed} onChange={(e) => setHoursDraft(d => d.map((x, xi) => xi === i ? { ...x, openMin: timeToMin(e.target.value) } : x))} style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(28,28,28,.12)", fontSize: 13 }} />
+                        <span>–</span>
+                        <input type="time" value={minToTime(h.closeMin)} disabled={h.closed} onChange={(e) => setHoursDraft(d => d.map((x, xi) => xi === i ? { ...x, closeMin: timeToMin(e.target.value) } : x))} style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(28,28,28,.12)", fontSize: 13 }} />
+                        <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <input type="checkbox" checked={h.closed} onChange={(e) => setHoursDraft(d => d.map((x, xi) => xi === i ? { ...x, closed: e.target.checked } : x))} />
+                          Closed
+                        </label>
+                      </div>
                     </div>
                   ))}
                 </div>
+                <button onClick={saveHours} className="bb-btn" style={{ marginTop: 18, padding: "12px 22px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Save hours</button>
               </div>
             )}
 
@@ -370,13 +537,21 @@ export default function SalonDashboardPage() {
                 <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>Salon gallery</h3>
                 <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>Upload photos of your salon, work, and team.</p>
                 <div className="bb-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginTop: 18 }}>
-                  {[1, 2, 3, 4, 5, 6].map(i => (
-                    <div key={i} className="bb-ph" style={{ height: 140, borderRadius: 16, display: "flex", alignItems: "flex-end" }}>
-                      <span style={{ fontFamily: "'Menlo',monospace", fontSize: 11, color: "#B06A85", padding: "8px 10px" }}>photo slot {i}</span>
+                  {images.length === 0 && (
+                    <p style={{ fontSize: 14, color: "#5a5457", gridColumn: "1 / -1" }}>No photos yet — upload your first ones below.</p>
+                  )}
+                  {images.map(img => (
+                    <div key={img.id} style={{ position: "relative", height: 140, borderRadius: 16, overflow: "hidden", background: "rgba(235,200,211,.2)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.url} alt={img.alt || "salon photo"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <button onClick={() => void deleteImage(img.id)} title="Remove photo" style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: 13, border: "none", background: "rgba(28,28,28,.65)", color: "#FAF8F7", fontSize: 13, cursor: "pointer", lineHeight: 1 }}>×</button>
                     </div>
                   ))}
                 </div>
-                <button className="bb-btn-ghost" style={{ marginTop: 16, padding: "12px 22px", borderRadius: 14, border: "1px solid rgba(28,28,28,.12)", background: "transparent", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Upload photos</button>
+                <label className="bb-btn-ghost" style={{ display: "inline-block", marginTop: 16, padding: "12px 22px", borderRadius: 14, border: "1px solid rgba(28,28,28,.12)", background: "transparent", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: uploading ? 0.6 : 1 }}>
+                  {uploading ? "Uploading…" : "Upload photos"}
+                  <input type="file" accept="image/*" multiple style={{ display: "none" }} disabled={uploading} onChange={(e) => { void uploadPhotos(e.target.files); e.target.value = ""; }} />
+                </label>
               </div>
             )}
 
@@ -384,16 +559,32 @@ export default function SalonDashboardPage() {
             {tab === "verification" && (
               <div style={{ marginTop: 24, borderRadius: 20, background: "#fff", border: "1px solid rgba(28,28,28,.06)", padding: 24 }}>
                 <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>Business verification</h3>
-                <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>Submit your documents to get verified and build trust with customers.</p>
+                <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>
+                  {currentSalon?.verified
+                    ? "Your salon is verified — the badge is live on your profile."
+                    : verification
+                      ? `Application status: ${verification.status}. You can update and resubmit below.`
+                      : "Submit your business details to get verified and build trust with customers."}
+                </p>
                 <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
-                  {["CNIC front", "CNIC back", "Business license", "Tax registration"].map((doc, i) => (
-                    <div key={doc} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(28,28,28,.08)" }}>
-                      <span style={{ fontSize: 14 }}>{doc}</span>
-                      <span style={{ fontSize: 13, color: "#5a5457" }}>{i < 2 ? "Uploaded" : "Not uploaded"}</span>
+                  {([
+                    ["CNIC number", "cnicNumber", verification?.cnicNumber],
+                    ["Business license number", "licenseNumber", verification?.licenseNumber],
+                    ["Tax registration (NTN)", "taxNumber", verification?.taxNumber],
+                  ] as Array<[string, keyof typeof verifForm, string | null | undefined]>).map(([label, key, current]) => (
+                    <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderRadius: 14, border: "1px solid rgba(28,28,28,.08)", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 14, minWidth: 170 }}>{label}</span>
+                      <input
+                        className="bb-input"
+                        placeholder={current ? `On file: ${current}` : "Not provided"}
+                        value={verifForm[key]}
+                        onChange={(e) => setVerifForm(f => ({ ...f, [key]: e.target.value }))}
+                        style={{ flex: "1 1 200px", padding: "9px 12px", borderRadius: 10, border: "1px solid rgba(28,28,28,.1)", fontSize: 13 }}
+                      />
                     </div>
                   ))}
                 </div>
-                <button className="bb-btn" style={{ marginTop: 18, padding: "12px 22px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Submit for verification</button>
+                <button onClick={submitVerification} className="bb-btn" style={{ marginTop: 18, padding: "12px 22px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Submit for verification</button>
               </div>
             )}
 
@@ -421,10 +612,9 @@ export default function SalonDashboardPage() {
               <div style={{ marginTop: 24 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
                   {[
-                    { label: "Total customers", value: "248" },
-                    { label: "Repeat rate", value: "72%" },
-                    { label: "Avg visits/customer", value: "3.4" },
-                    { label: "Birthdays this month", value: "12" },
+                    { label: "Total customers", value: String(crmStats.total) },
+                    { label: "Repeat customers", value: String(crmStats.repeat) },
+                    { label: "Avg visits/customer", value: String(crmStats.avgVisits) },
                   ].map(s => (
                     <div key={s.label} style={{ borderRadius: 18, background: "#fff", border: "1px solid rgba(28,28,28,.06)", padding: 22 }}>
                       <p style={{ fontSize: 13, color: "#5a5457" }}>{s.label}</p>
@@ -434,20 +624,19 @@ export default function SalonDashboardPage() {
                 </div>
                 <div style={{ marginTop: 24, borderRadius: 20, background: "#fff", border: "1px solid rgba(28,28,28,.06)", padding: 24 }}>
                   <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>Customer directory</h3>
-                  <input className="bb-input" placeholder="Search customers..." style={{ marginTop: 12, width: "100%", padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(28,28,28,.1)", fontSize: 14 }} />
                   <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[
-                      { name: "Fatima Ahmed", phone: "0300-1234567", visits: 8, last: "2026-07-04" },
-                      { name: "Zara Khan", phone: "0301-7654321", visits: 5, last: "2026-07-03" },
-                      { name: "Sana Tariq", phone: "0302-9988776", visits: 12, last: "2026-07-01" },
-                      { name: "Hina Raza", phone: "0303-5544332", visits: 3, last: "2026-06-28" },
-                    ].map(c => (
-                      <div key={c.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderRadius: 12, border: "1px solid rgba(28,28,28,.06)" }}>
+                    {crmCustomers.length === 0 && (
+                      <p style={{ fontSize: 14, color: "#5a5457" }}>No customers yet — profiles appear here automatically after their first booking.</p>
+                    )}
+                    {crmCustomers.map(c => (
+                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderRadius: 12, border: "1px solid rgba(28,28,28,.06)" }}>
                         <div>
-                          <span style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</span>
-                          <span style={{ fontSize: 13, color: "#5a5457", marginLeft: 10 }}>{c.phone}</span>
+                          <span style={{ fontWeight: 600, fontSize: 14 }}>{c.name || "Customer"}</span>
+                          {c.phone && <span style={{ fontSize: 13, color: "#5a5457", marginLeft: 10 }}>{c.phone}</span>}
                         </div>
-                        <div style={{ fontSize: 13, color: "#5a5457" }}>{c.visits} visits &middot; Last {c.last}</div>
+                        <div style={{ fontSize: 13, color: "#5a5457" }}>
+                          {c.totalVisits} visits{c.lastVisitAt ? ` · Last ${new Date(c.lastVisitAt).toLocaleDateString()}` : ""}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -461,24 +650,23 @@ export default function SalonDashboardPage() {
                 <div style={{ borderRadius: 20, background: "#fff", border: "1px solid rgba(28,28,28,.06)", padding: 24 }}>
                   <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>Inventory</h3>
                   <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[
-                      { name: "Hair color - Brown", sku: "HC-001", stock: 24, threshold: 10 },
-                      { name: "Shampoo - Premium", sku: "SP-002", stock: 8, threshold: 10 },
-                      { name: "Conditioner - Silk", sku: "SC-003", stock: 3, threshold: 10 },
-                      { name: "Nail polish - Red", sku: "NP-004", stock: 45, threshold: 15 },
-                      { name: "Face mask - Organic", sku: "FM-005", stock: 0, threshold: 10 },
-                    ].map(p => {
-                      const stockColor = p.stock === 0 ? "#a33" : p.stock < p.threshold ? "#7a5c14" : "#1C1C1C";
-                      const stockBg = p.stock === 0 ? "rgba(163,51,51,.1)" : p.stock < p.threshold ? "rgba(212,175,55,.15)" : "rgba(28,28,28,.06)";
+                    {products.length === 0 && (
+                      <p style={{ fontSize: 14, color: "#5a5457" }}>No products yet — add your first below to start tracking stock.</p>
+                    )}
+                    {products.map(p => {
+                      const stock = p.inventory?.[0]?.quantity ?? 0;
+                      const threshold = p.minStock ?? 5;
+                      const stockColor = stock === 0 ? "#a33" : stock < threshold ? "#7a5c14" : "#1C1C1C";
+                      const stockBg = stock === 0 ? "rgba(163,51,51,.1)" : stock < threshold ? "rgba(212,175,55,.15)" : "rgba(28,28,28,.06)";
                       return (
-                        <div key={p.sku} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderRadius: 12, border: "1px solid rgba(28,28,28,.06)" }}>
+                        <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderRadius: 12, border: "1px solid rgba(28,28,28,.06)" }}>
                           <div>
                             <span style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</span>
-                            <span style={{ fontSize: 12, color: "#5a5457", marginLeft: 8 }}>{p.sku}</span>
+                            {p.sku && <span style={{ fontSize: 12, color: "#5a5457", marginLeft: 8 }}>{p.sku}</span>}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, background: stockBg, color: stockColor }}>{p.stock} in stock</span>
-                            {p.stock < p.threshold && <span style={{ fontSize: 11, color: "#a33", fontWeight: 600 }}>Reorder!</span>}
+                            <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, background: stockBg, color: stockColor }}>{stock} in stock</span>
+                            {stock < threshold && <span style={{ fontSize: 11, color: "#a33", fontWeight: 600 }}>Reorder!</span>}
                           </div>
                         </div>
                       );
@@ -488,10 +676,10 @@ export default function SalonDashboardPage() {
                 <div style={{ borderRadius: 20, background: "rgba(235,200,211,.12)", padding: 24 }}>
                   <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>Quick add product</h3>
                   <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-                    <input className="bb-input" placeholder="Product name" style={{ flex: "1 1 160px" }} />
-                    <input className="bb-input" placeholder="SKU" style={{ width: 100 }} />
-                    <input className="bb-input" type="number" placeholder="Qty" style={{ width: 80 }} />
-                    <button className="bb-btn" style={{ padding: "12px 20px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+                    <input className="bb-input" placeholder="Product name" value={newProd.name} onChange={e => setNewProd(p => ({ ...p, name: e.target.value }))} style={{ flex: "1 1 160px" }} />
+                    <input className="bb-input" placeholder="SKU" value={newProd.sku} onChange={e => setNewProd(p => ({ ...p, sku: e.target.value }))} style={{ width: 100 }} />
+                    <input className="bb-input" type="number" placeholder="Qty" value={newProd.qty} onChange={e => setNewProd(p => ({ ...p, qty: e.target.value }))} style={{ width: 80 }} />
+                    <button onClick={() => void addProduct()} className="bb-btn" style={{ padding: "12px 20px", borderRadius: 14, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
                   </div>
                 </div>
               </div>
@@ -500,9 +688,12 @@ export default function SalonDashboardPage() {
             {/* Marketing */}
             {tab === "marketing" && (
               <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>Campaigns</h3>
-                  <button className="bb-btn" style={{ padding: "10px 18px", borderRadius: 12, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Create campaign</button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="bb-input" placeholder="Campaign name" value={newCampaign} onChange={e => setNewCampaign(e.target.value)} style={{ padding: "9px 12px", borderRadius: 12, border: "1px solid rgba(28,28,28,.1)", fontSize: 13 }} />
+                    <button onClick={() => void createCampaign()} className="bb-btn" style={{ padding: "10px 18px", borderRadius: 12, border: "none", background: "#1C1C1C", color: "#FAF8F7", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ Create campaign</button>
+                  </div>
                 </div>
                 <div style={{ borderRadius: 20, background: "#fff", border: "1px solid rgba(28,28,28,.06)", overflow: "hidden" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 0, padding: "14px 18px", borderBottom: "1px solid rgba(28,28,28,.08)", fontSize: 12, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#5a5457" }}>
@@ -511,32 +702,42 @@ export default function SalonDashboardPage() {
                     <span>Reach</span>
                     <span>Action</span>
                   </div>
-                  {[
-                    { name: "Summer Glow Sale", status: "Active", reach: "1,240" },
-                    { name: "New Client Offer", status: "Active", reach: "892" },
-                    { name: "Referral Bonus", status: "Scheduled", reach: "-" },
-                    { name: "Mega Monsoon", status: "Draft", reach: "-" },
-                  ].map(c => (
-                    <div key={c.name} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 0, padding: "14px 18px", borderBottom: "1px solid rgba(28,28,28,.04)", fontSize: 13, alignItems: "center" }}>
+                  {campaigns.length === 0 && (
+                    <p style={{ padding: "16px 18px", fontSize: 14, color: "#5a5457" }}>No campaigns yet — create your first above.</p>
+                  )}
+                  {campaigns.map(c => (
+                    <div key={c.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 0, padding: "14px 18px", borderBottom: "1px solid rgba(28,28,28,.04)", fontSize: 13, alignItems: "center" }}>
                       <span style={{ fontWeight: 600 }}>{c.name}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 10, background: c.status === "Active" ? "rgba(28,28,28,.08)" : c.status === "Scheduled" ? "rgba(212,175,55,.2)" : "rgba(28,28,28,.05)", color: c.status === "Active" ? "#1C1C1C" : c.status === "Scheduled" ? "#7a5c14" : "#5a5457", display: "inline-block", width: "fit-content" }}>{c.status}</span>
-                      <span style={{ color: "#4a4446" }}>{c.reach}</span>
-                      <button style={{ border: "none", background: "transparent", color: "#B06A85", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", padding: 0 }}>Edit</button>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 10, background: c.status === "ACTIVE" ? "rgba(28,28,28,.08)" : c.status === "DRAFT" ? "rgba(28,28,28,.05)" : "rgba(212,175,55,.2)", color: c.status === "ACTIVE" ? "#1C1C1C" : c.status === "DRAFT" ? "#5a5457" : "#7a5c14", display: "inline-block", width: "fit-content" }}>{c.status}</span>
+                      <span style={{ color: "#4a4446" }}>{c.sent ?? "-"}</span>
+                      <button onClick={() => void toggleCampaign(c)} style={{ border: "none", background: "transparent", color: "#B06A85", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", padding: 0 }}>
+                        {c.status === "ACTIVE" ? "Pause" : "Activate"}
+                      </button>
                     </div>
                   ))}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                   <div style={{ borderRadius: 18, background: "#fff", border: "1px solid rgba(28,28,28,.06)", padding: 22 }}>
                     <h4 style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>Promotions</h4>
-                    <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>50% off on first visit</p>
-                    <p style={{ fontSize: 14, color: "#5a5457" }}>Refer a friend & get Rs 500 off</p>
-                    <button style={{ marginTop: 10, border: "none", background: "transparent", color: "#B06A85", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>+ Add promotion</button>
+                    {promotions.length === 0 && <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>No promotions yet.</p>}
+                    {promotions.map(p => (
+                      <p key={p.id} style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>{p.title}{p.active ? "" : " (inactive)"}</p>
+                    ))}
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <input className="bb-input" placeholder="Promotion title" value={newPromo} onChange={e => setNewPromo(e.target.value)} style={{ flex: 1, padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(28,28,28,.1)", fontSize: 13 }} />
+                      <button onClick={() => void createPromotion()} style={{ border: "none", background: "transparent", color: "#B06A85", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>+ Add</button>
+                    </div>
                   </div>
                   <div style={{ borderRadius: 18, background: "#fff", border: "1px solid rgba(28,28,28,.06)", padding: 22 }}>
                     <h4 style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>Active offers</h4>
-                    <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>Buy 2 get 1 free on haircuts</p>
-                    <p style={{ fontSize: 14, color: "#5a5457" }}>20% off on bridal packages</p>
-                    <button style={{ marginTop: 10, border: "none", background: "transparent", color: "#B06A85", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>+ Add offer</button>
+                    {offersList.length === 0 && <p style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>No offers yet.</p>}
+                    {offersList.map(o => (
+                      <p key={o.id} style={{ fontSize: 14, color: "#5a5457", marginTop: 6 }}>{o.title}{o.active ? "" : " (inactive)"}</p>
+                    ))}
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <input className="bb-input" placeholder="Offer title" value={newOffer} onChange={e => setNewOffer(e.target.value)} style={{ flex: 1, padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(28,28,28,.1)", fontSize: 13 }} />
+                      <button onClick={() => void createOffer()} style={{ border: "none", background: "transparent", color: "#B06A85", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>+ Add</button>
+                    </div>
                   </div>
                 </div>
               </div>
