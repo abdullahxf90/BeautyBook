@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import SocialLoginButtons from "@/components/SocialLoginButtons";
 import { useAuth } from "@/lib/auth";
 
 const serif = "'Cormorant Garamond',serif";
@@ -114,6 +115,10 @@ function LoginForm() {
         >
           {busy ? "Logging in…" : "Log in"}
         </button>
+        <SocialLoginButtons
+          onSuccess={() => router.push(params.get("next") || "/dashboard")}
+          onError={(m) => setError(m)}
+        />
         <p style={{ fontSize: 14, color: "#5a5457", textAlign: "center", marginTop: 6 }}>
           New to BeautyBook?{" "}
           <Link href={`/signup${params.get("next") ? `?next=${params.get("next")}` : ""}`} style={{ color: "#B06A85", fontWeight: 600 }}>

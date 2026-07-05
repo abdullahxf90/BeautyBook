@@ -7,7 +7,12 @@ const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 async function main() {
-  // ---- Cities & areas ----
+  // ---- Country, cities & areas ----
+  const pakistan = await prisma.country.upsert({
+    where: { code: "PK" },
+    update: {},
+    create: { name: "Pakistan", code: "PK" },
+  });
   const cityDefs: Record<string, string[]> = {
     Karachi: ["Clifton", "DHA", "Gulshan-e-Iqbal", "PECHS"],
     Lahore: ["Gulberg", "Cantt", "DHA Phase 5", "Johar Town"],
@@ -17,9 +22,9 @@ async function main() {
   const areas: Record<string, string> = {};
   for (const [cityName, areaNames] of Object.entries(cityDefs)) {
     const city = await prisma.city.upsert({
-      where: { name: cityName },
+      where: { name_countryId: { name: cityName, countryId: pakistan.id } },
       update: {},
-      create: { name: cityName },
+      create: { name: cityName, countryId: pakistan.id },
     });
     for (const a of areaNames) {
       const area = await prisma.area.upsert({
@@ -236,6 +241,17 @@ async function main() {
   ];
   for (const bp of blogPosts) {
     await prisma.blogPost.upsert({ where: { slug: bp.slug }, update: {}, create: bp });
+  }
+
+  // ---- Staff (booking engine schedules against Staff, mirror every Employee) ----
+  const allEmployees = await prisma.employee.findMany({ select: { salonId: true, name: true, title: true } });
+  for (const emp of allEmployees) {
+    const existing = await prisma.staff.findFirst({ where: { salonId: emp.salonId, name: emp.name } });
+    if (!existing) {
+      await prisma.staff.create({
+        data: { salonId: emp.salonId, name: emp.name, title: emp.title, active: true },
+      });
+    }
   }
 
   console.log("Seed complete.");

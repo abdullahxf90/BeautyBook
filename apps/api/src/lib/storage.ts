@@ -1,11 +1,22 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = `https://${process.env.SUPABASE_PROJECT_REF}.supabase.co`;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const projectRef = process.env.SUPABASE_PROJECT_REF;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-});
+let client: SupabaseClient | null = null;
+
+/** Lazily created so the API can boot without storage credentials; upload endpoints fail with a clear error instead. */
+function getSupabase(): SupabaseClient {
+  if (!projectRef || !supabaseServiceKey) {
+    throw new Error("File storage is not configured (SUPABASE_PROJECT_REF / SUPABASE_SERVICE_ROLE_KEY missing)");
+  }
+  if (!client) {
+    client = createClient(`https://${projectRef}.supabase.co`, supabaseServiceKey, {
+      auth: { persistSession: false },
+    });
+  }
+  return client;
+}
 
 export const BUCKETS = {
   AVATARS: "avatars",
@@ -27,6 +38,7 @@ export async function uploadFile(
   buffer: Buffer,
   mimetype: string,
 ): Promise<string> {
+  const supabase = getSupabase();
   const { error } = await supabase.storage
     .from(bucket)
     .upload(path, buffer, { contentType: mimetype, upsert: true });
@@ -39,7 +51,7 @@ export async function uploadFile(
 
 /** Delete a file from Supabase Storage by its full public URL. */
 export async function deleteFile(bucket: BucketName, path: string): Promise<void> {
-  await supabase.storage.from(bucket).remove([path]);
+  await getSupabase().storage.from(bucket).remove([path]);
 }
 
 /** Extract the storage path from a public URL. */

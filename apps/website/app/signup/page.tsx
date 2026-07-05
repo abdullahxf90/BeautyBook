@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import SocialLoginButtons from "@/components/SocialLoginButtons";
 import { useAuth } from "@/lib/auth";
 
 const serif = "'Cormorant Garamond',serif";
@@ -54,6 +55,10 @@ function SignupForm() {
         >
           {busy ? "Creating account…" : "Sign up"}
         </button>
+        <SocialLoginButtons
+          onSuccess={() => router.push(params.get("next") || "/dashboard")}
+          onError={(m) => setError(m)}
+        />
         <p style={{ fontSize: 14, color: "#5a5457", textAlign: "center", marginTop: 6 }}>
           Already a member?{" "}
           <Link href={`/login${params.get("next") ? `?next=${params.get("next")}` : ""}`} style={{ color: "#B06A85", fontWeight: 600 }}>

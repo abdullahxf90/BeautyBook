@@ -9,6 +9,7 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ requiresTwoFactor: boolean; challengeToken?: string }>;
   verifyTwoFactor: (challengeToken: string, code: string) => Promise<void>;
+  socialLogin: (provider: "GOOGLE" | "FACEBOOK" | "APPLE", providerToken: string) => Promise<void>;
   register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -83,6 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     applySession(res.user, res.accessToken, res.refreshToken);
   }, [applySession]);
 
+  const socialLogin = useCallback(async (provider: "GOOGLE" | "FACEBOOK" | "APPLE", providerToken: string) => {
+    const res = await api<{ user: UserInfo; accessToken: string; refreshToken: string }>("/api/auth/social", {
+      method: "POST",
+      body: JSON.stringify({ provider, token: providerToken }),
+    });
+    applySession(res.user, res.accessToken, res.refreshToken);
+  }, [applySession]);
+
   const register = useCallback(async (name: string, email: string, password: string, phone?: string) => {
     const res = await api<{ user: UserInfo; accessToken: string; refreshToken: string }>("/api/auth/register", {
       method: "POST",
@@ -109,8 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   const value = useMemo(
-    () => ({ user, token, loading, login, verifyTwoFactor, register, logout, refreshUser }),
-    [user, token, loading, login, verifyTwoFactor, register, logout, refreshUser],
+    () => ({ user, token, loading, login, verifyTwoFactor, socialLogin, register, logout, refreshUser }),
+    [user, token, loading, login, verifyTwoFactor, socialLogin, register, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

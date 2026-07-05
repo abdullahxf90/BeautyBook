@@ -1,3 +1,23 @@
+import path from "path";
+import fs from "fs";
+
+// Load the repo-root .env for local development (Vercel/production set real env vars).
+// Only fills in variables that are not already set, so platform env always wins.
+if (!process.env.VERCEL) {
+  for (const envPath of [path.resolve(__dirname, "../../../.env"), path.resolve(process.cwd(), ".env")]) {
+    if (!fs.existsSync(envPath)) continue;
+    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!m || line.trim().startsWith("#")) continue;
+      const [, key, raw] = m;
+      if (process.env[key] === undefined) {
+        process.env[key] = raw.replace(/^["']|["']$/g, "");
+      }
+    }
+    break;
+  }
+}
+
 export const config = {
   port: parseInt(process.env.API_PORT || "4000", 10),
   jwtSecret: process.env.JWT_SECRET || "dev-only-secret-change-me",

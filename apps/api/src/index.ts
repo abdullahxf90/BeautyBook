@@ -47,7 +47,12 @@ import loyaltyRoutes from "./routes/loyalty";
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: config.corsOrigin.split(","), credentials: true }));
+// Local dev always accepts the local website; production origins come from CORS_ORIGIN.
+const corsOrigins = new Set(config.corsOrigin.split(","));
+if (!process.env.VERCEL && process.env.NODE_ENV !== "production") {
+  corsOrigins.add("http://localhost:3000");
+}
+app.use(cors({ origin: [...corsOrigins], credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }));
 
