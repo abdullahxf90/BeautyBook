@@ -205,4 +205,90 @@ router.delete("/methods/:id", requireAuth, asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+router.post("/process", requireAuth, validate(z.object({
+  bookingId: z.string(),
+  method: z.enum(["CASH", "CARD", "STRIPE", "JAZZCASH", "EASYPAISA"]),
+  couponCode: z.string().optional(),
+  redeemPoints: z.number().int().min(0).optional(),
+})), asyncHandler(async (req, res) => {
+  const { bookingId, method, couponCode, redeemPoints } = getValidated<{ bookingId: string; method: string; couponCode?: string; redeemPoints?: number }>(req);
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { payment: true } });
+  if (!booking) throw new ApiError(404, "Booking not found");
+  if (booking.payment) throw new ApiError(400, "Payment already exists for this booking");
+
+  let total = booking.total;
+  let discount = 0;
+  let couponId: string | undefined;
+  let pointsUsed = 0;
+
+  if (couponCode) {
+    const coupon = await prisma.coupon.findUnique({ where: { code: couponCode.toUpperCase() } });
+    if (!coupon || !coupon.active) throw new ApiError(400, "Invalid coupon");
+    if (coupon.expiresAt && coupon.expiresAt < new Date()) throw new ApiError(400, "Coupon expired");
+    if (coupon.maxUses && coupon.uses >= coupon.maxUses) throw new ApiError(400, "Coupon fully redeemed");
+    discount = Math.min(coupon.type === "PERCENT" ? Math.round((total * coupon.value) / 100) : coupon.value, total);
+    couponId = coupon.id;
+    total -= discount;
+    await prisma.coupon.update({ where: { id: coupon.id }, data: { uses: { increment: 1 } } });
+    await prisma.couponUsage.create({ data: { couponId: coupon.id, userId: req.user!.id } });
+  }
+
+  if (redeemPoints && redeemPoints > 0) {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { loyaltyPoints: true } });
+    const maxRedeem = Math.min(redeemPoints, user?.loyaltyPoints ?? 0, total);
+    if (maxRedeem > 0) {
+      pointsUsed = maxRedeem;
+      total -= maxRedeem;
+      await prisma.user.update({ where: { id: req.user!.id }, data: { loyaltyPoints: { decrement: maxRedeem } } });
+      await prisma.loyaltyTransaction.create({ data: { userId: req.user!.id, points: maxRedeem, reason: "REDEMPTION", type: "REDEEM" } });
+    }
+  }
+
+  const payment = await prisma.payment.create({
+    data: { bookingId, method: method as any, status: "PENDING", amount: Math.max(0, total) },
+  });
+
+  if (couponId) {
+    await prisma.booking.update({ where: { id: bookingId }, data: { couponId, discount } });
+  }
+
+  if (method === "CASH") {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { loyaltyPoints: true, loyaltyTier: true } });
+    const pointsEarned = Math.floor(total * 0.05);
+    await prisma.loyaltyTransaction.create({ data: { userId: req.user!.id, points: pointsEarned, reason: "BOOKING", type: "EARN", bookingId } });
+    await prisma.user.update({ where: { id: req.user!.id }, data: { loyaltyPoints: { increment: pointsEarned } } });
+  }
+
+  res.status(201).json({ payment, discount, pointsUsed, total });
+}));
+
+router.post("/:id/confirm", requireAuth, asyncHandler(async (req, res) => {
+  const payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { booking: true } });
+  if (!payment) throw new ApiError(404, "Payment not found");
+  if (payment.booking.userId !== req.user!.id && req.user!.role !== "ADMIN") throw new ApiError(403, "Forbidden");
+  if (payment.status !== "PENDING") throw new ApiError(400, "Payment already processed");
+
+  await prisma.payment.update({ where: { id: payment.id }, data: { status: "PAID" } });
+  await prisma.paymentAttempt.create({ data: { paymentId: payment.id, method: payment.method, status: "SUCCESS" } });
+
+  const pointsEarned = Math.floor(payment.amount * 0.05);
+  await prisma.loyaltyTransaction.create({ data: { userId: payment.booking.userId, points: pointsEarned, reason: "BOOKING", type: "EARN", bookingId: payment.bookingId } });
+  await prisma.user.update({ where: { id: payment.booking.userId }, data: { loyaltyPoints: { increment: pointsEarned } } });
+
+  res.json({ payment, loyaltyEarned: pointsEarned });
+}));
+
+router.post("/:id/refund", requireAuth, asyncHandler(async (req, res) => {
+  const payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { booking: true } });
+  if (!payment) throw new ApiError(404, "Payment not found");
+  if (payment.status !== "PAID") throw new ApiError(400, "Only paid payments can be refunded");
+
+  await prisma.$transaction([
+    prisma.payment.update({ where: { id: payment.id }, data: { status: "REFUNDED" } }),
+    prisma.walletTransaction.create({ data: { userId: payment.booking.userId, type: "CREDIT", amount: payment.amount, balance: payment.amount, reason: "REFUND", bookingId: payment.bookingId } }),
+    prisma.paymentAttempt.create({ data: { paymentId: payment.id, method: payment.method, status: "SUCCESS" } }),
+  ]);
+  res.json({ success: true });
+}));
+
 export default router;

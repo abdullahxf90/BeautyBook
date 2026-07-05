@@ -427,6 +427,7 @@ model Salon {
   featured        Boolean @default(false)
   trending        Boolean @default(false)
   verified        Boolean @default(false)
+  listed          Boolean @default(true) // false until an admin approves a partner application
   homeService     Boolean @default(false)
   instantBooking  Boolean @default(true)
   gender          Gender  @default(UNISEX)
@@ -2589,4 +2590,320 @@ model SalonReport {
   createdAt       DateTime @default(now())
 
   @@index([salonId, periodStart, periodEnd])
+}
+
+// ──────────────────────────────────────────────
+// ADMIN — Commission Rules
+// ──────────────────────────────────────────────
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED
+}
+
+model CommissionRule {
+  id              String         @id @default(cuid())
+  name            String
+  type            CommissionType @default(PERCENTAGE)
+  rate            Float
+  categoryId      String?        // null = applies to all categories
+  salonId         String?        // null = applies to all salons
+  minBookingValue Int?           // minimum booking value for this rate to apply
+  maxBookingValue Int?           // maximum booking value
+  startAt         DateTime?
+  endAt           DateTime?
+  active          Boolean        @default(true)
+  createdBy       String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([active])
+  @@index([categoryId])
+  @@index([salonId])
+}
+
+// ──────────────────────────────────────────────
+// ADMIN — Fraud Detection
+// ──────────────────────────────────────────────
+
+enum FraudSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FraudStatus {
+  PENDING_INVESTIGATION
+  CONFIRMED
+  FALSE_POSITIVE
+  DISMISSED
+}
+
+model FraudRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   // DUPLICATE_ACCOUNT, FAKE_REVIEW, PAYMENT_FRAUD, REFERRAL_ABUSE, COUPON_ABUSE, SPAM, BOT
+  condition   String   // JSON — rule logic
+  action      String   // FLAG, BLOCK, SUSPEND, NOTIFY
+  active      Boolean  @default(true)
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reports FraudReport[]
+
+  @@index([type, active])
+}
+
+model FraudReport {
+  id          String       @id @default(cuid())
+  ruleId      String?
+  rule        FraudRule?   @relation(fields: [ruleId], references: [id])
+  type        String
+  severity    FraudSeverity @default(MEDIUM)
+  status      FraudStatus  @default(PENDING_INVESTIGATION)
+  entityType  String       // USER, SALON, REVIEW, BOOKING, PAYMENT
+  entityId    String
+  description String?
+  evidence    String?      // JSON
+  flaggedBy   String?      // userId or "SYSTEM"
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  resolution  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([status])
+  @@index([entityType, entityId])
+  @@index([type])
+}
+
+// ──────────────────────────────────────────────
+// ADMIN — Backup & Restore
+// ──────────────────────────────────────────────
+
+enum BackupStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model BackupHistory {
+  id          String       @id @default(cuid())
+  type        String       // MANUAL, SCHEDULED
+  status      BackupStatus @default(IN_PROGRESS)
+  scope       String       // FULL, DATABASE_ONLY, STORAGE_ONLY
+  fileUrl     String?
+  fileSize    BigInt?
+  durationMs  Int?
+  errorLog    String?
+  triggeredBy String?
+  startedAt   DateTime     @default(now())
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@index([status])
+  @@index([type])
+}
+
+// ──────────────────────────────────────────────
+// ADMIN — API Management
+// ──────────────────────────────────────────────
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String
+  key         String   @unique
+  prefix      String
+  userId      String?
+  permissions String   @default("[]") // JSON array
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  logs ApiLog[]
+
+  @@index([prefix])
+  @@index([userId])
+}
+
+model ApiLog {
+  id         String   @id @default(cuid())
+  apiKeyId   String?
+  apiKey     ApiKey?  @relation(fields: [apiKeyId], references: [id])
+  method     String
+  path       String
+  statusCode Int
+  durationMs Int
+  ipAddress  String?
+  userAgent  String?
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([createdAt])
+  @@index([path])
+}
+
+model WebhookLog {
+  id          String   @id @default(cuid())
+  event       String
+  url         String
+  statusCode  Int?
+  requestBody String?
+  responseBody String?
+  durationMs  Int?
+  success     Boolean  @default(false)
+  retryCount  Int      @default(0)
+  nextRetryAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([event])
+  @@index([success])
+}
+
+// ──────────────────────────────────────────────
+// ADMIN — Platform Advertisements
+// ──────────────────────────────────────────────
+
+enum AdPlacement {
+  HOME_BANNER
+  SIDEBAR
+  POPUP
+  FEATURED_SALON
+  SPONSORED_LISTING
+  SEARCH_RESULT
+  CATEGORY_PAGE
+}
+
+enum AdStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+  CANCELLED
+}
+
+model Advertisement {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  imageUrl    String     @default("")
+  linkUrl     String?
+  placement   AdPlacement
+  status      AdStatus   @default(ACTIVE)
+  startAt     DateTime?
+  endAt       DateTime?
+  budget      Int?
+  spent       Int        @default(0)
+  maxImpressions Int?
+  maxClicks      Int?
+  salonId     String?    // if it's a featured/sponsored salon listing
+  sortOrder   Int        @default(0)
+  createdBy   String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  impressions AdImpression[]
+  clicks      AdClick[]
+
+  @@index([placement, status])
+  @@index([salonId])
+}
+
+model AdImpression {
+  id              String        @id @default(cuid())
+  advertisementId String
+  advertisement   Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+  userId          String?
+  ipAddress       String?
+  userAgent       String?
+  pageUrl         String?
+  servedAt        DateTime      @default(now())
+
+  @@index([advertisementId])
+}
+
+model AdClick {
+  id              String        @id @default(cuid())
+  advertisementId String
+  advertisement   Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+  userId          String?
+  ipAddress       String?
+  userAgent       String?
+  pageUrl         String?
+  clickedAt       DateTime      @default(now())
+
+  @@index([advertisementId])
+}
+
+// ──────────────────────────────────────────────
+// SEARCH & DISCOVERY
+// ──────────────────────────────────────────────
+
+model TrendingSearch {
+  id        String   @id @default(cuid())
+  query     String   @unique
+  count     Int      @default(1)
+  category  String?
+  city      String?
+  period    String   @default("DAY") // DAY, WEEK, MONTH
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([count])
+  @@index([period])
+}
+
+model SearchAnalytics {
+  id             String   @id @default(cuid())
+  query          String
+  userId         String?
+  resultsCount   Int      @default(0)
+  clickRank      Int?
+  clickedSalonId String?
+  clickedServiceId String?
+  filters        String?  // JSON
+  sessionId      String?
+  durationMs     Int?
+  source         String?  // SEARCH_BAR, EXPLORE, MAP, SUGGESTION
+  createdAt      DateTime @default(now())
+
+  @@index([query])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model PriceAlert {
+  id          String   @id @default(cuid())
+  userId      String
+  serviceId   String?
+  salonId     String
+  targetPrice Int?
+  active      Boolean  @default(true)
+  triggered   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, salonId, serviceId])
+  @@index([userId])
+  @@index([active])
+}
+
+model UserPreference {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  favoriteCategories String  @default("[]")
+  favoriteServices   String  @default("[]")
+  priceMin          Int?
+  priceMax          Int?
+  preferredCity     String?
+  preferredArea     String?
+  preferredGender   String?
+  homeService       Boolean  @default(false)
+  quietHours        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
