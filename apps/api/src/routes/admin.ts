@@ -49,10 +49,11 @@ router.get(
       prisma.service.groupBy({ by: ["categoryId"], _count: true, orderBy: { _count: { id: "desc" } }, take: 5 }),
     ]);
 
-    const activeUsers = await (prisma.securityLog.count as any)({
+    const activeUserGroups = await prisma.securityLog.groupBy({
+      by: ["userId"],
       where: { createdAt: { gte: weekAgo }, action: "LOGIN_SUCCESS" },
-      distinct: ["userId"],
     });
+    const activeUsers = activeUserGroups.length;
 
     const revenue = (results[12] as any)._sum?.amount ?? 0;
     const avgRating = (results[15] as any)._avg?.rating ?? 0;

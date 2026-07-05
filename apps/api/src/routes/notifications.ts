@@ -24,4 +24,28 @@ router.post("/read", asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+router.post("/:id/read", asyncHandler(async (req, res) => {
+  const { count } = await prisma.notification.updateMany({
+    where: { id: req.params.id, userId: req.user!.id },
+    data: { read: true },
+  });
+  if (!count) return res.status(404).json({ error: "Notification not found" });
+  res.json({ ok: true });
+}));
+
+router.delete("/read", asyncHandler(async (req, res) => {
+  const { count } = await prisma.notification.deleteMany({
+    where: { userId: req.user!.id, read: true },
+  });
+  res.json({ ok: true, deleted: count });
+}));
+
+router.delete("/:id", asyncHandler(async (req, res) => {
+  const { count } = await prisma.notification.deleteMany({
+    where: { id: req.params.id, userId: req.user!.id },
+  });
+  if (!count) return res.status(404).json({ error: "Notification not found" });
+  res.json({ ok: true });
+}));
+
 export default router;

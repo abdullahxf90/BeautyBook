@@ -22,11 +22,15 @@ router.get("/recommendations", requireAuth, asyncHandler(async (req, res) => {
   const favoriteSalonIds = favorites.map((f) => f.salonId);
   const viewedSalonIds = recentlyViewed.map((r) => r.salonId);
 
+  const salonMatchers: object[] = [];
+  if (categoryIds.size) salonMatchers.push({ categories: { some: { categoryId: { in: Array.from(categoryIds) } } } });
+  if (favoriteSalonIds.length || viewedSalonIds.length) salonMatchers.push({ id: { in: [...favoriteSalonIds, ...viewedSalonIds] } });
+
   const [recommended, trending] = await Promise.all([
     prisma.salon.findMany({
       where: {
         verified: true,
-        OR: [{ category: categoryIds.size ? { id: { in: Array.from(categoryIds) } } : undefined }, { id: { in: [...favoriteSalonIds, ...viewedSalonIds] } }].filter(Boolean),
+        ...(salonMatchers.length ? { OR: salonMatchers } : {}),
       },
       include: { area: { include: { city: true } }, images: { take: 1, orderBy: { sort: "asc" } }, _count: { select: { bookings: true, reviews: true } } },
       orderBy: { rating: "desc" },
@@ -157,6 +161,57 @@ router.get("/search-history", requireAuth, asyncHandler(async (req, res) => {
 
 router.delete("/search-history", requireAuth, asyncHandler(async (req, res) => {
   await prisma.searchHistory.deleteMany({ where: { userId: req.user!.id } });
+  res.json({ success: true });
+}));
+
+router.get("/continue-booking", requireAuth, asyncHandler(async (req, res) => {
+  const drafts = await prisma.continueBooking.findMany({
+    where: { userId: req.user!.id },
+    orderBy: { updatedAt: "desc" },
+  });
+  const salons = drafts.length
+    ? await prisma.salon.findMany({
+        where: { id: { in: drafts.map((d) => d.salonId) } },
+        include: { area: { include: { city: true } }, images: { take: 1, orderBy: { sort: "asc" } } },
+      })
+    : [];
+  const salonById = new Map(salons.map((s) => [s.id, s]));
+  res.json({
+    drafts: drafts.map((d) => ({ ...d, services: JSON.parse(d.services), salon: salonById.get(d.salonId) ?? null })),
+  });
+}));
+
+router.put("/continue-booking", requireAuth, asyncHandler(async (req, res) => {
+  const { salonId, services, staffId, date, notes, step } = req.body || {};
+  if (!salonId || !Array.isArray(services)) {
+    return res.status(400).json({ error: "salonId and services array are required" });
+  }
+  const salon = await prisma.salon.findUnique({ where: { id: salonId }, select: { id: true } });
+  if (!salon) return res.status(404).json({ error: "Salon not found" });
+  const draft = await prisma.continueBooking.upsert({
+    where: { userId_salonId: { userId: req.user!.id, salonId } },
+    update: {
+      services: JSON.stringify(services),
+      staffId: staffId ?? null,
+      date: date ? new Date(date) : null,
+      notes: notes ?? null,
+      step: typeof step === "number" ? step : undefined,
+    },
+    create: {
+      userId: req.user!.id,
+      salonId,
+      services: JSON.stringify(services),
+      staffId: staffId ?? null,
+      date: date ? new Date(date) : null,
+      notes: notes ?? null,
+      step: typeof step === "number" ? step : 1,
+    },
+  });
+  res.json({ draft: { ...draft, services: JSON.parse(draft.services) } });
+}));
+
+router.delete("/continue-booking/:salonId", requireAuth, asyncHandler(async (req, res) => {
+  await prisma.continueBooking.deleteMany({ where: { userId: req.user!.id, salonId: req.params.salonId } });
   res.json({ success: true });
 }));
 
