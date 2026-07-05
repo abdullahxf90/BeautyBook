@@ -16,6 +16,8 @@
     "db:generate": "npm run generate -w @beautybook/database",
     "db:migrate": "npm run migrate -w @beautybook/database",
     "db:seed": "npm run seed -w @beautybook/database",
+    "test": "node --test tests/api.smoke.test.mjs",
+    "typecheck": "cd apps/api && npx tsc --noEmit && cd ../website && npx tsc --noEmit",
     "postinstall": "npx --yes prisma@5.22.0 generate --schema=packages/database/prisma/schema.prisma && npx --yes -p typescript@5.6.3 tsc -p packages/database/tsconfig.json"
   }
 }

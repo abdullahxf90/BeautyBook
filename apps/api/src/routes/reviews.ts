@@ -30,11 +30,12 @@ router.post("/", requireAuth, validate(createSchema), asyncHandler(async (req, r
   const data = getValidated<z.infer<typeof createSchema>>(req);
   const booking = await prisma.booking.findUnique({
     where: { id: data.bookingId },
-    include: { review: true },
+    include: { review: true, salon: { select: { ownerId: true } } },
   });
   if (!booking || booking.userId !== req.user!.id) throw new ApiError(404, "Booking not found");
   if (booking.status !== "COMPLETED") throw new ApiError(403, "You can only review completed appointments");
   if (booking.review) throw new ApiError(409, "You have already reviewed this appointment");
+  if (booking.salon.ownerId === req.user!.id) throw new ApiError(403, "You cannot review your own salon");
 
   const review = await prisma.review.create({
     data: {
