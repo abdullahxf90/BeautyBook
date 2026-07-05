@@ -16,7 +16,7 @@
     "db:generate": "npm run generate -w @beautybook/database",
     "db:migrate": "npm run migrate -w @beautybook/database",
     "db:seed": "npm run seed -w @beautybook/database",
-    "postinstall": "npx --yes prisma@5.22.0 generate --schema=packages/database/prisma/schema.prisma"
+    "postinstall": "npx --yes prisma@5.22.0 generate --schema=packages/database/prisma/schema.prisma && npx --yes -p typescript@5.6.3 tsc -p packages/database/tsconfig.json"
   }
 }
 
