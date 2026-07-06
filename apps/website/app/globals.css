@@ -112,3 +112,16 @@ a { color: inherit; }
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* Accessibility: honor the OS "reduce motion" preference. Additive only —
+   the visual design is unchanged for everyone who hasn't requested it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

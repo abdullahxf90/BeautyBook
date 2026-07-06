@@ -12,6 +12,24 @@ env:
   IMAGE_WEBSITE: ghcr.io/${{ github.repository }}/website
 
 jobs:
+  security-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --workspaces --include-workspace-root
+      # Gate merges on CRITICAL known vulnerabilities. High/moderate are printed
+      # for visibility but don't block (the current Next.js "high" advisories are
+      # only resolved by a major-version upgrade tracked separately).
+      - name: npm audit (report high, fail on critical)
+        run: |
+          npm audit --audit-level=high || true
+          npm audit --audit-level=critical
+
   lint-typecheck:
     name: Lint & TypeCheck
     runs-on: ubuntu-latest
