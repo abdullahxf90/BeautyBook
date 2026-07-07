@@ -17,9 +17,12 @@ function pooledUrl(): string | undefined {
       if (!url.searchParams.has("pgbouncer")) url.searchParams.set("pgbouncer", "true");
     }
     if (!url.searchParams.has("connection_limit")) {
-      url.searchParams.set("connection_limit", "5");
-      url.searchParams.set("pool_timeout", "30");
-      url.searchParams.set("connect_timeout", "30");
+      // The transaction pooler (pgbouncer) multiplexes, so a slightly larger
+      // Prisma pool is safe and gives headroom for cold-start request bursts
+      // (Next SSR compiling several routes at once) without pool-timeout 500s.
+      url.searchParams.set("connection_limit", "10");
+      url.searchParams.set("pool_timeout", "20");
+      url.searchParams.set("connect_timeout", "20");
     }
     return url.toString();
   } catch {
