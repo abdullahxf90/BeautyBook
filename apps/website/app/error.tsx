@@ -6,7 +6,11 @@ import { useEffect } from "react";
 // stays resilient even if the failure came from shared layout components.
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    // Surfaces client render/runtime errors for diagnosis; wire to Sentry here when configured.
+    // Reports to Sentry only when a DSN is configured. The env check is inlined
+    // at build time, so the SDK is tree-shaken out of the bundle when unused.
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      void import("@sentry/nextjs").then((Sentry) => Sentry.captureException(error));
+    }
     console.error(error);
   }, [error]);
 

@@ -10,6 +10,7 @@ import { signAccessToken, signRefreshToken, signResetToken, verifyRefreshToken, 
 import { requireAuth } from "../middleware/auth";
 import { getValidated, validate } from "../middleware/validate";
 import { config } from "../config";
+import { sendEmail, emailLayout } from "../lib/email";
 
 const router = Router();
 
@@ -56,6 +57,15 @@ async function issueOtp(userId: string, type: string, title: string) {
   await prisma.notification.create({
     data: { userId, title, body: `Your BeautyBook verification code is ${code}. It expires in 5 minutes.` },
   });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user?.email) {
+    await sendEmail({
+      to: user.email,
+      subject: `${code} is your BeautyBook code`,
+      html: emailLayout("Your verification code", `<p>Use this code to continue:</p><p style="font-family:'Space Grotesk',Arial,sans-serif;font-size:32px;font-weight:600;letter-spacing:.12em;color:#1C1C1C;">${code}</p><p>It expires in 5 minutes. If you didn't request this, you can ignore this email.</p>`),
+      text: `Your BeautyBook verification code is ${code}. It expires in 5 minutes.`,
+    });
+  }
   return code;
 }
 
@@ -83,6 +93,16 @@ async function issueEmailVerification(userId: string) {
   await prisma.notification.create({
     data: { userId, title: "Verify your email", body: `Use this token to verify your email address: ${token}` },
   });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user?.email) {
+    const link = `${config.corsOrigin.split(",")[0]}/verify-email?token=${token}`;
+    await sendEmail({
+      to: user.email,
+      subject: "Verify your BeautyBook email",
+      html: emailLayout("Confirm your email", `<p>Welcome to BeautyBook! Confirm your email to unlock booking, reviews and rewards.</p><p><a href="${link}" style="display:inline-block;margin-top:8px;padding:12px 24px;border-radius:12px;background:#1C1C1C;color:#FAF8F7;text-decoration:none;font-weight:600;">Verify email</a></p><p style="margin-top:16px;font-size:13px;color:#9a9296;">Or use this token: ${token}</p>`),
+      text: `Verify your BeautyBook email: ${link}`,
+    });
+  }
   return token;
 }
 
@@ -238,6 +258,13 @@ router.post("/forgot-password", validate(z.object({ email: z.string().email() })
     const resetToken = signResetToken({ sub: user.id, role: user.role });
     await prisma.notification.create({
       data: { userId: user.id, title: "Password reset requested", body: `Use this token to reset: ${resetToken}` },
+    });
+    const link = `${config.corsOrigin.split(",")[0]}/reset-password?token=${resetToken}`;
+    await sendEmail({
+      to: user.email,
+      subject: "Reset your BeautyBook password",
+      html: emailLayout("Reset your password", `<p>We received a request to reset your password. This link expires shortly.</p><p><a href="${link}" style="display:inline-block;margin-top:8px;padding:12px 24px;border-radius:12px;background:#1C1C1C;color:#FAF8F7;text-decoration:none;font-weight:600;">Reset password</a></p><p style="margin-top:16px;font-size:13px;color:#9a9296;">If you didn't request this, you can safely ignore this email.</p>`),
+      text: `Reset your BeautyBook password: ${link}`,
     });
   }
   res.json({ ok: true });

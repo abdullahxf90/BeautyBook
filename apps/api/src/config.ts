@@ -35,4 +35,8 @@ export const config = {
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   facebookAppId: process.env.FACEBOOK_APP_ID || "",
   appleClientId: process.env.APPLE_CLIENT_ID || "",
+  resendApiKey: process.env.RESEND_API_KEY || "",
+  emailFrom: process.env.EMAIL_FROM || "BeautyBook <onboarding@resend.dev>",
+  sentryDsn: process.env.SENTRY_DSN || "",
+  nodeEnv: process.env.NODE_ENV || "development",
 };

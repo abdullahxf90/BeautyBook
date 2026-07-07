@@ -1,8 +1,11 @@
+import { config } from "./config";
+import { initSentry, sentryEnabled, Sentry } from "./lib/sentry";
+// Initialize error tracking before anything else so early failures are captured.
+initSentry();
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import { config } from "./config";
 import { errorHandler } from "./utils/http";
 import { requestLogger } from "./middleware/requestLog";
 import { securityHeaders, csrfProtection } from "./middleware/security";
@@ -110,6 +113,8 @@ app.use("/api/infra", infraRoutes);
 app.use("/api/legal", legalRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
+// Capture unhandled route errors in Sentry before our JSON error formatter runs.
+if (sentryEnabled()) Sentry.setupExpressErrorHandler(app);
 app.use(errorHandler);
 
 if (!process.env.VERCEL) {
