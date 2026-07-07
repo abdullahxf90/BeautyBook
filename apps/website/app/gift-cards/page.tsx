@@ -8,7 +8,7 @@ import Reveal from "@/components/Reveal";
 import { api, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 interface GiftCardInfo { id: string; code: string; amount: number; balance: number; message: string | null; recipientEmail: string | null; recipientName: string | null; recipient: { name: string; email: string } | null; createdAt: string; redeemedAt: string | null }
 

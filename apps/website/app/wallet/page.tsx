@@ -8,7 +8,7 @@ import Footer from "@/components/Footer";
 import { api, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 interface WalletTxn { id: string; type: string; amount: number; balance: number; reason: string; createdAt: string }
 interface LoyaltyTxn { id: string; points: number; reason: string; createdAt: string }

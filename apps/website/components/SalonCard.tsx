@@ -23,7 +23,7 @@ export default function SalonCard({ salon, slots }: { salon: SalonSummary; slots
                 position: "absolute",
                 left: 14,
                 top: 14,
-                fontFamily: "'Manrope'",
+                fontFamily: "'Hanken Grotesk'",
                 fontSize: 12,
                 fontWeight: 600,
                 background: "rgba(255,255,255,.85)",
@@ -60,7 +60,7 @@ export default function SalonCard({ salon, slots }: { salon: SalonSummary; slots
         </Link>
         <div style={{ padding: "20px 22px 22px" }}>
           <Link href={`/salon/${salon.slug}`} style={{ textDecoration: "none", color: "inherit" }}>
-            <h3 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 24, fontWeight: 600 }}>{salon.name}</h3>
+            <h3 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 24, fontWeight: 600 }}>{salon.name}</h3>
           </Link>
           <p style={{ fontSize: 14, color: "#5a5457", marginTop: 2 }}>
             {salon.area.name}, {salon.area.city.name}
@@ -96,7 +96,7 @@ export default function SalonCard({ salon, slots }: { salon: SalonSummary; slots
           >
             <div>
               <span style={{ fontSize: 13, color: "#5a5457" }}>from </span>
-              <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, fontWeight: 600 }}>{rupees(salon.priceFrom)}</span>
+              <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 600 }}>{rupees(salon.priceFrom)}</span>
             </div>
             <Link
               href={`/book/${salon.slug}`}

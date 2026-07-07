@@ -8,7 +8,7 @@ import Footer from "@/components/Footer";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 const EVENTS = ["Wedding", "Eid", "Graduation", "Photoshoot", "Vacation"] as const;
 type EventType = (typeof EVENTS)[number];
 

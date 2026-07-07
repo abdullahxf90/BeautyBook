@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api, BookingInfo } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 export default function CheckInPage() {
   const [code, setCode] = useState("");
@@ -40,7 +40,7 @@ export default function CheckInPage() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        fontFamily: "'Manrope',sans-serif",
+        fontFamily: "'Hanken Grotesk',sans-serif",
         padding: 24,
       }}
     >

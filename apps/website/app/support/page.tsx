@@ -5,7 +5,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 const faqs = [
   { q: "How do I book an appointment?", a: "Browse salons on the Explore page, select your desired services, pick a specialist and time slot, then confirm your booking. You'll receive an instant confirmation." },

@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 import { apiTry } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 interface BlogPostSummary { id: string; slug: string; title: string; excerpt: string; category: string; coverUrl: string | null; authorName: string; readTimeMin: number; createdAt: string; featured: boolean }
 

@@ -9,7 +9,7 @@ import { api, BookingInfo, rupees, SalonSummary } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLive } from "@/lib/useLive";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 type Tab = "bookings" | "favorites" | "notifications" | "profile";
 
 interface NotificationInfo {

@@ -42,20 +42,20 @@ export default function Nav() {
         alignItems: "center",
         justifyContent: "space-between",
         gap: 32,
-        padding: "18px clamp(24px,5vw,72px)",
+        padding: "16px clamp(24px,5vw,72px)",
         backdropFilter: "blur(18px)",
         WebkitBackdropFilter: "blur(18px)",
-        background: "rgba(250,248,247,.72)",
-        borderBottom: "1px solid rgba(28,28,28,.06)",
+        background: "rgba(250,248,247,.7)",
+        borderBottom: "1px solid rgba(28,28,28,.055)",
       }}
     >
       <Link
         href="/"
         style={{
-          fontFamily: "'Cormorant Garamond',serif",
-          fontSize: 26,
+          fontFamily: "'Space Grotesk',sans-serif",
+          fontSize: 21,
           fontWeight: 600,
-          letterSpacing: ".12em",
+          letterSpacing: "-.02em",
           color: "#1C1C1C",
           textDecoration: "none",
         }}
@@ -92,14 +92,14 @@ export default function Nav() {
                 Staff Dashboard
               </Link>
             )}
-            <button onClick={() => void logout()} className="bb-btn" style={{ fontSize: 14, fontWeight: 600, color: "#FAF8F7", border: "none", cursor: "pointer", padding: "11px 22px", borderRadius: 20, background: "#1C1C1C", whiteSpace: "nowrap", boxShadow: "0 6px 18px rgba(28,28,28,.14)" }}>
+            <button onClick={() => void logout()} className="bb-btn" style={{ fontSize: 14, fontWeight: 600, color: "#FAF8F7", border: "none", cursor: "pointer", padding: "10px 20px", borderRadius: 12, background: "#1C1C1C", whiteSpace: "nowrap", boxShadow: "0 6px 18px rgba(28,28,28,.14)" }}>
               Logout
             </button>
           </>
         ) : (
           <>
             <Link href="/login" style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1C", textDecoration: "none", padding: "9px 14px" }}>Login</Link>
-            <Link href="/signup" className="bb-btn" style={{ fontSize: 14, fontWeight: 600, color: "#FAF8F7", textDecoration: "none", padding: "11px 22px", borderRadius: 20, background: "#1C1C1C", whiteSpace: "nowrap", boxShadow: "0 6px 18px rgba(28,28,28,.14)" }}>Sign Up</Link>
+            <Link href="/signup" className="bb-btn" style={{ fontSize: 14, fontWeight: 600, color: "#FAF8F7", textDecoration: "none", padding: "10px 20px", borderRadius: 12, background: "#1C1C1C", whiteSpace: "nowrap", boxShadow: "0 6px 18px rgba(28,28,28,.14)" }}>Sign Up</Link>
           </>
         )}
       </div>

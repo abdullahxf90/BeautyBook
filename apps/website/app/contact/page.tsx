@@ -5,7 +5,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 export default function ContactPage() {
   const [name, setName] = useState("");

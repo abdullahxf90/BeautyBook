@@ -3,7 +3,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 const tips = [
   { cat: "Skincare", title: "The 5-step ritual for a lasting glow", desc: "Cleanse, tone, treat, moisturize, protect — the simple routine dermatologists swear by.", min: "4" },

@@ -13,7 +13,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
   return (
     <div style={{ minHeight: "70vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 24px", textAlign: "center" }}>
       <div style={{ maxWidth: 520 }}>
-        <h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontWeight: 500, fontSize: "clamp(40px,7vw,72px)", color: "#1C1C1C" }}>Something went wrong</h1>
+        <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 500, fontSize: "clamp(40px,7vw,72px)", color: "#1C1C1C" }}>Something went wrong</h1>
         <p style={{ fontSize: 17, lineHeight: 1.6, color: "#5a5457", marginTop: 14 }}>
           We hit an unexpected snag. Please try again — if it keeps happening, refresh the page.
         </p>

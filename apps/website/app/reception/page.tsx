@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 interface ReceptionBooking {
   id: string;
@@ -126,7 +126,7 @@ export default function ReceptionPage() {
   );
 
   return (
-    <div style={{ background: "#FAF8F7", minHeight: "100vh", fontFamily: "'Manrope',sans-serif" }}>
+    <div style={{ background: "#FAF8F7", minHeight: "100vh", fontFamily: "'Hanken Grotesk',sans-serif" }}>
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "clamp(20px,3vh,36px) clamp(16px,4vw,32px)" }}>
         {/* Top bar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>

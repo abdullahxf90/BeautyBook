@@ -39,9 +39,9 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 const s: Record<string, React.CSSProperties> = {
-  container: { maxWidth: 1400, margin: "0 auto", padding: "40px 24px", fontFamily: "Manrope, sans-serif", color: "#1C1C1C" },
+  container: { maxWidth: 1400, margin: "0 auto", padding: "40px 24px", fontFamily: "Hanken Grotesk, sans-serif", color: "#1C1C1C" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 },
-  h1: { fontSize: 28, fontWeight: 700, fontFamily: "Cormorant Garamond, serif" },
+  h1: { fontSize: 28, fontWeight: 700, fontFamily: "Space Grotesk, serif" },
   tabs: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 32, borderBottom: "1px solid #E8E0DC", paddingBottom: 8 },
   tab: { padding: "8px 16px", border: "none", background: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#8A7F7A", borderRadius: 6, transition: "all .2s" },
   tabActive: { padding: "8px 16px", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#B06A85", background: "#F5EDEA", borderRadius: 6 },

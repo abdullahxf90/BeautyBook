@@ -8,7 +8,7 @@ import { api, API_URL, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLive } from "@/lib/useLive";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 type Tab = "overview" | "bookings" | "services" | "employees" | "hours" | "gallery" | "verification" | "analytics" | "crm" | "inventory" | "marketing";
 

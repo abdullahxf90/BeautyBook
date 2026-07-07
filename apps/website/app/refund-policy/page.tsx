@@ -1,7 +1,7 @@
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 export const metadata = { title: "Refund Policy — BeautyBook" };
 

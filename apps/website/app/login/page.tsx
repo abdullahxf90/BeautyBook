@@ -8,7 +8,7 @@ import Footer from "@/components/Footer";
 import SocialLoginButtons from "@/components/SocialLoginButtons";
 import { useAuth } from "@/lib/auth";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 function LoginForm() {
   const router = useRouter();

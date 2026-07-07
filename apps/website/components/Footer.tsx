@@ -54,7 +54,7 @@ export default function Footer() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "clamp(48px,7vh,80px) clamp(24px,5vw,40px) 40px" }}>
         <div className="bb-footer-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr repeat(4,1fr)", gap: 40 }}>
           <div>
-            <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 26, fontWeight: 600, letterSpacing: ".12em", color: "#FAF8F7" }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 26, fontWeight: 600, letterSpacing: ".12em", color: "#FAF8F7" }}>
               BeautyBook
             </div>
             <p style={{ fontSize: 15, lineHeight: 1.6, marginTop: 14, maxWidth: "34ch" }}>

@@ -6,7 +6,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { api } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 const rupees = (n: number) => `Rs ${n.toLocaleString("en-PK")}`;
 
 interface MapMarker {

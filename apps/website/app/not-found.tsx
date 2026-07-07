@@ -7,7 +7,7 @@ export default function NotFound() {
     <>
       <Nav />
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "120px 24px 140px", textAlign: "center" }}>
-        <h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontWeight: 500, fontSize: "clamp(48px,8vw,90px)" }}>404</h1>
+        <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 500, fontSize: "clamp(48px,8vw,90px)" }}>404</h1>
         <p style={{ fontSize: 17, color: "#5a5457", marginTop: 14 }}>This page has vanished like yesterday&apos;s blowdry.</p>
         <Link
           href="/"

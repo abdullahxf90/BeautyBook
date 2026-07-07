@@ -6,7 +6,7 @@ import Reveal from "@/components/Reveal";
 import FavoriteButton from "@/components/FavoriteButton";
 import { apiTry, apiTryStatus, ReviewInfo, rupees, SalonDetail } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 

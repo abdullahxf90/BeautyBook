@@ -3,7 +3,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 const perks = [
   { title: "Reach thousands", desc: "Get discovered by customers actively searching for your services across Pakistan." },

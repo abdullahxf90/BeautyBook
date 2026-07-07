@@ -7,7 +7,7 @@ import Footer from "@/components/Footer";
 import SalonCard from "@/components/SalonCard";
 import { api, SalonSummary } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 interface Meta {
   cities: { name: string; areas: { name: string }[] }[];

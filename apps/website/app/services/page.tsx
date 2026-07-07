@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 import { apiTry } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 interface CategoryInfo { name: string; slug: string; mark: string; tint: string; _count?: { services: number } }
 

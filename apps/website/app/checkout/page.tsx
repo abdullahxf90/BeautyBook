@@ -8,7 +8,7 @@ import Footer from "@/components/Footer";
 import { api, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 function CheckoutContent() {
   const params = useSearchParams();

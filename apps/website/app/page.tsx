@@ -7,7 +7,7 @@ import SalonCard from "@/components/SalonCard";
 import SearchBar from "@/components/SearchBar";
 import { apiTry, SalonSummary } from "@/lib/api";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 // Fallback content identical to the original design, used until the API/DB is online.
 const fallbackCategories = [
@@ -99,30 +99,32 @@ export default async function HomePage() {
       <Nav />
       <div style={{ position: "relative", zIndex: 1 }}>
         {/* HERO */}
-        <section style={{ maxWidth: 1120, margin: "0 auto", padding: "clamp(56px,9vh,120px) clamp(24px,5vw,40px) 40px", textAlign: "center" }}>
+        <section style={{ maxWidth: 1080, margin: "0 auto", padding: "clamp(60px,10vh,132px) clamp(24px,5vw,40px) 40px", textAlign: "center" }}>
           <Reveal>
             <span
               style={{
-                display: "inline-block",
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: ".16em",
-                textTransform: "uppercase",
-                color: "#B06A85",
-                padding: "8px 16px",
-                border: "1px solid rgba(176,106,133,.28)",
-                borderRadius: 20,
-                background: "rgba(255,255,255,.5)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12.5,
+                fontWeight: 500,
+                letterSpacing: ".02em",
+                color: "#575153",
+                padding: "7px 15px",
+                border: "1px solid rgba(28,28,28,.1)",
+                borderRadius: 100,
+                background: "rgba(255,255,255,.55)",
               }}
             >
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#B06A85" }} />
               Pakistan&apos;s beauty marketplace
             </span>
           </Reveal>
-          <Reveal as="h1" style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(44px,7vw,96px)", lineHeight: 1.02, letterSpacing: "-.01em", margin: "26px auto 0", maxWidth: "14ch" }}>
-            Find Pakistan&apos;s Best Beauty Professionals
+          <Reveal as="h1" style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(42px,6.4vw,84px)", lineHeight: 1.03, letterSpacing: "-.03em", margin: "24px auto 0", maxWidth: "15ch" }}>
+            Find Pakistan&apos;s best beauty professionals
           </Reveal>
-          <Reveal as="p" style={{ fontSize: "clamp(16px,1.5vw,19px)", lineHeight: 1.6, color: "#5a5457", maxWidth: "56ch", margin: "26px auto 0", fontWeight: 400 }}>
-            Discover salons, compare real reviews, explore every service, and book your appointment in seconds — all in one beautifully simple place.
+          <Reveal as="p" style={{ fontSize: "clamp(16px,1.4vw,19px)", lineHeight: 1.6, color: "#575153", maxWidth: "54ch", margin: "22px auto 0", fontWeight: 400 }}>
+            Discover salons, compare real reviews, explore every service, and book your appointment in seconds — all in one calm, simple place.
           </Reveal>
 
           <Reveal>

@@ -33,7 +33,7 @@ const brand = (
   <div style={{ textAlign: "center", animation: `bbFadeIn 1s ${ease} both` }}>
     <h1
       style={{
-        fontFamily: "'Cormorant Garamond',serif",
+        fontFamily: "'Space Grotesk',sans-serif",
         fontWeight: 500,
         fontSize: "clamp(64px,11vw,150px)",
         letterSpacing: ".14em",

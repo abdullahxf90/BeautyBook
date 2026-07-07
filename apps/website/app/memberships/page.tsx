@@ -8,7 +8,7 @@ import Reveal from "@/components/Reveal";
 import { api, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 interface MembershipPlan { id: string; name: string; slug: string; description: string; price: number; durationDays: number; perks: string }
 interface UserMembership { id: string; membershipId: string; status: string; startAt: string; expiresAt: string; membership: MembershipPlan }

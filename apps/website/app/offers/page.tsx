@@ -3,7 +3,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 const offers = [
   { badge: "Save 30%", title: "Bridal package season", desc: "Complete bridal glow-up at handpicked ateliers this wedding season.", bg: "rgba(235,200,211,.28)", code: "BRIDAL30", expiry: "Dec 31, 2026", terms: "Valid on bridal packages above Rs 20,000. Cannot be combined with other offers." },

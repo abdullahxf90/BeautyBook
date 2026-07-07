@@ -7,7 +7,7 @@ import Footer from "@/components/Footer";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-const serif = "'Cormorant Garamond',serif";
+const serif = "'Space Grotesk',sans-serif";
 
 type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
