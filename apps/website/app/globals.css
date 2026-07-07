@@ -113,6 +113,23 @@ a { color: inherit; }
   100% { background-position: -200% 0; }
 }
 
+/* ── Dark theme ─────────────────────────────────────────────────────────
+   The whole app is styled with inline colors, so instead of re-authoring
+   every page we invert the entire document when data-theme="dark" and
+   counter-invert real media (photos, videos) so they look normal. The cream
+   #FAF8F7 base inverts to near-black for a full-black feel. */
+html[data-theme="dark"] { background: #0b0b0b; }
+html[data-theme="dark"] body { background: #0b0b0b; }
+html[data-theme="dark"] .bb-theme-root {
+  filter: invert(1) hue-rotate(180deg);
+}
+html[data-theme="dark"] .bb-theme-root img,
+html[data-theme="dark"] .bb-theme-root video,
+html[data-theme="dark"] .bb-theme-root iframe,
+html[data-theme="dark"] .bb-theme-root [data-no-invert] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* Accessibility: honor the OS "reduce motion" preference. Additive only —
    the visual design is unchanged for everyone who hasn't requested it. */
 @media (prefers-reduced-motion: reduce) {

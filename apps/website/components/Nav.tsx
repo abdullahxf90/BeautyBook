@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import ThemeToggle from "./ThemeToggle";
 
 const navLinks: Array<{ label: string; href: string }> = [
   { label: "Home", href: "/" },
@@ -72,6 +73,7 @@ export default function Nav() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <ThemeToggle />
         {/* Mobile hamburger */}
         <button onClick={() => setMobileOpen(!mobileOpen)} className="bb-nav-links" style={{ display: "none", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#1C1C1C" }}>☰</button>
 
@@ -111,17 +113,16 @@ export default function Nav() {
           {user?.role === "STAFF" && (
             <Link href="/staff" onClick={() => setMobileOpen(false)} style={{ fontSize: 16, fontWeight: 500, color: "#B06A85", textDecoration: "none" }}>Staff Dashboard</Link>
           )}
+          <div style={{ marginTop: 8 }}><ThemeToggle compact /></div>
         </div>
       )}
     </nav>
 
-    {/* Quick links — always visible, scrolls with the page (not part of the sticky bar) */}
+    {/* Quick links — always visible, scrolls with the page (not part of the sticky bar).
+        Outer scrolls on small screens; inner uses margin-auto so the pills stay
+        centered when they fit and scroll from the start when they overflow. */}
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-start",
-        gap: 10,
         padding: "10px clamp(24px,5vw,72px)",
         background: "rgba(235,200,211,.16)",
         borderBottom: "1px solid rgba(28,28,28,.05)",
@@ -129,26 +130,28 @@ export default function Nav() {
         WebkitOverflowScrolling: "touch",
       }}
     >
-      {quickLinks.map((item) => (
-        <Link
-          key={item.label}
-          href={item.href}
-          className="bb-navlink"
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: "#4a4446",
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-            padding: "7px 14px",
-            borderRadius: 16,
-            background: "rgba(255,255,255,.75)",
-            border: "1px solid rgba(28,28,28,.07)",
-          }}
-        >
-          {item.label}
-        </Link>
-      ))}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "max-content", maxWidth: "100%", margin: "0 auto" }}>
+        {quickLinks.map((item) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="bb-navlink"
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#4a4446",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+              padding: "7px 14px",
+              borderRadius: 16,
+              background: "rgba(255,255,255,.75)",
+              border: "1px solid rgba(28,28,28,.07)",
+            }}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
     </div>
     </>
   );
