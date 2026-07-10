@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import DashboardShell from "@/components/DashboardShell";
 import { api, API_URL, rupees } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLive } from "@/lib/useLive";
@@ -357,47 +358,46 @@ export default function SalonDashboardPage() {
 
   const currentSalon = salons.find(s => s.id === selectedSalon);
 
-  const tabBtn = (t: Tab, label: string) => (
-    <button key={t} onClick={() => setTab(t)} style={{ padding: "9px 16px", borderRadius: 14, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: tab === t ? "#1C1C1C" : "rgba(255,255,255,.7)", color: tab === t ? "#FAF8F7" : "#4a4446" }}>
-      {label}
-    </button>
-  );
+  if (salons.length === 0) {
+    return (
+      <>
+        <Nav />
+        <RegisterSalonForm onRegistered={() => void loadSalons()} />
+        <Footer />
+      </>
+    );
+  }
 
   return (
-    <>
-      <Nav />
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px,5vh,56px) clamp(24px,5vw,40px) 80px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: ".16em", textTransform: "uppercase", color: "#B06A85" }}>Salon Dashboard</span>
-            <h1 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(30px,4vw,44px)", marginTop: 8 }}>Manage your business</h1>
-          </div>
-          {salons.length > 0 && (
-            <select value={selectedSalon} onChange={e => setSelectedSalon(e.target.value)} style={{ padding: "10px 14px", borderRadius: 14, border: "1px solid rgba(28,28,28,.12)", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-              {salons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          )}
-        </div>
-
-        {salons.length === 0 ? (
-          <RegisterSalonForm onRegistered={() => void loadSalons()} />
-        ) : (
-          <>
-            <div style={{ display: "flex", gap: 8, marginTop: 24, flexWrap: "wrap", borderBottom: "1px solid rgba(28,28,28,.08)", paddingBottom: 14 }}>
-              {tabBtn("overview", "Overview")}
-              {tabBtn("bookings", "Bookings")}
-              {tabBtn("services", "Services")}
-              {tabBtn("employees", "Staff")}
-              {tabBtn("hours", "Hours")}
-              {tabBtn("gallery", "Gallery")}
-              {tabBtn("verification", "Verification")}
-              {tabBtn("analytics", "Analytics")}
-              {tabBtn("crm", "CRM")}
-              {tabBtn("inventory", "Inventory")}
-              {tabBtn("marketing", "Marketing")}
-            </div>
-
-            {msg && <p style={{ marginTop: 16, fontSize: 14, color: "#B06A85", fontWeight: 600 }}>{msg}</p>}
+    <DashboardShell
+      eyebrow="Shop Dashboard"
+      title="Manage your business"
+      subtitle={currentSalon?.name}
+      active={tab}
+      onSelect={(k) => setTab(k as Tab)}
+      items={[
+        { key: "overview", label: "Overview" },
+        { key: "bookings", label: "Bookings" },
+        { key: "services", label: "Services" },
+        { key: "employees", label: "Staff" },
+        { key: "hours", label: "Hours" },
+        { key: "gallery", label: "Gallery" },
+        { key: "verification", label: "Verification" },
+        { key: "analytics", label: "Analytics" },
+        { key: "crm", label: "CRM" },
+        { key: "inventory", label: "Inventory" },
+        { key: "marketing", label: "Marketing" },
+      ]}
+      footerSlot={
+        salons.length > 1 ? (
+          <select value={selectedSalon} onChange={(e) => setSelectedSalon(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(28,28,28,.12)", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            {salons.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        ) : undefined
+      }
+    >
+      <div>
+        {msg && <p style={{ marginBottom: 16, fontSize: 14, color: "#B06A85", fontWeight: 600 }}>{msg}</p>}
 
             {/* Overview */}
             {tab === "overview" && currentSalon && (
@@ -742,10 +742,7 @@ export default function SalonDashboardPage() {
                 </div>
               </div>
             )}
-          </>
-        )}
       </div>
-      <Footer />
-    </>
+    </DashboardShell>
   );
 }

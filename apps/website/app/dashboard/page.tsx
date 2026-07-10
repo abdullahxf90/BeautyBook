@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
+import DashboardShell from "@/components/DashboardShell";
 import { api, BookingInfo, rupees, SalonSummary } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLive } from "@/lib/useLive";
@@ -97,18 +96,6 @@ export default function DashboardPage() {
 
   if (loading || !user) return null;
 
-  const tabStyle = (t: Tab) => ({
-    padding: "11px 20px",
-    borderRadius: 16,
-    border: "none",
-    fontSize: 14,
-    fontWeight: 600 as const,
-    cursor: "pointer",
-    background: tab === t ? "#1C1C1C" : "rgba(255,255,255,.7)",
-    color: tab === t ? "#FAF8F7" : "#4a4446",
-    boxShadow: tab === t ? "0 6px 18px rgba(28,28,28,.14)" : "none",
-  });
-
   const upcoming = bookings.filter((b) => b.status === "CONFIRMED" || b.status === "PENDING");
   const past = bookings.filter((b) => b.status !== "CONFIRMED" && b.status !== "PENDING");
 
@@ -173,27 +160,23 @@ export default function DashboardPage() {
   };
 
   return (
-    <>
-      <Nav />
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "clamp(32px,5vh,56px) clamp(24px,5vw,40px) 90px" }}>
-        <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: ".16em", textTransform: "uppercase", color: "#B06A85" }}>My BeautyBook</span>
-        <h1 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(34px,5vw,54px)", marginTop: 10 }}>Hello, {user.name.split(" ")[0]}</h1>
-        <p style={{ fontSize: 15, color: "#5a5457", marginTop: 8 }}>
-          {user.loyaltyPoints} loyalty points · {upcoming.length} upcoming booking{upcoming.length === 1 ? "" : "s"}
-        </p>
+    <DashboardShell
+      eyebrow="My BeautyBook"
+      title={`Hello, ${user.name.split(" ")[0]}`}
+      subtitle={`${user.loyaltyPoints} loyalty points · ${upcoming.length} upcoming`}
+      active={tab}
+      onSelect={(k) => setTab(k as Tab)}
+      items={[
+        { key: "bookings", label: "Bookings" },
+        { key: "favorites", label: "Favorites" },
+        { key: "notifications", label: "Notifications", badge: notifications.some((n) => !n.read) },
+        { key: "profile", label: "Profile" },
+      ]}
+    >
+      <div style={{ maxWidth: 900 }}>
+        {msg && <p style={{ marginBottom: 18, fontSize: 14, color: "#B06A85", fontWeight: 600 }}>{msg}</p>}
 
-        <div style={{ display: "flex", gap: 10, marginTop: 26, flexWrap: "wrap" }}>
-          <button style={tabStyle("bookings")} onClick={() => setTab("bookings")}>Bookings</button>
-          <button style={tabStyle("favorites")} onClick={() => setTab("favorites")}>Favorites</button>
-          <button style={tabStyle("notifications")} onClick={() => setTab("notifications")}>
-            Notifications{notifications.some((n) => !n.read) ? " ●" : ""}
-          </button>
-          <button style={tabStyle("profile")} onClick={() => setTab("profile")}>Profile</button>
-        </div>
-
-        {msg && <p style={{ marginTop: 18, fontSize: 14, color: "#B06A85", fontWeight: 600 }}>{msg}</p>}
-
-        <div style={{ marginTop: 26, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {tab === "bookings" && (
             <>
               {bookings.length === 0 && (
@@ -248,8 +231,7 @@ export default function DashboardPage() {
           {tab === "profile" && <ProfileTab onLogout={() => void logout().then(() => router.push("/"))} />}
         </div>
       </div>
-      <Footer />
-    </>
+    </DashboardShell>
   );
 }
 

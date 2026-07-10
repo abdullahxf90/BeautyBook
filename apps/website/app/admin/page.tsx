@@ -3,8 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
-import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
+import DashboardShell from "@/components/DashboardShell";
 import { useEffect, useState, useCallback } from "react";
 import { useLive } from "@/lib/useLive";
 
@@ -77,21 +76,15 @@ export default function AdminPage() {
   if (loading || !tokenReady || !user || !token) return null;
 
   return (
-    <>
-      <Nav />
-      <div style={s.container}>
-        <div style={s.header}>
-          <h1 style={s.h1}>Admin Control Center</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 13, color: "#8A7F7A" }}>{user.name} ({user.role})</span>
-            <Badge color="#2E7D32" bg="#E8F5E9" label="LIVE" />
-          </div>
-        </div>
-        <div style={s.tabs}>
-          {TABS.map((t) => (
-            <button key={t.id} style={tab === t.id ? s.tabActive : s.tab} onClick={() => setTab(t.id)}>{t.label}</button>
-          ))}
-        </div>
+    <DashboardShell
+      eyebrow="Control Center"
+      title="Admin"
+      subtitle={`${user.name} · ${user.role}`}
+      active={tab}
+      onSelect={(k) => setTab(k as Tab)}
+      items={TABS.map((t) => ({ key: t.id, label: t.label }))}
+    >
+      <div>
         <AdminDashboardSection token={token} active={tab === "dashboard"} />
         <UsersSection token={token} active={tab === "users"} />
         <SalonsSection token={token} active={tab === "salons"} />
@@ -114,8 +107,7 @@ export default function AdminPage() {
         <SecuritySection token={token} active={tab === "security"} />
         <SystemSection token={token} active={tab === "system"} />
       </div>
-      <Footer />
-    </>
+    </DashboardShell>
   );
 }
 

@@ -129,6 +129,23 @@ html[data-theme="dark"] .bb-theme-root iframe,
 html[data-theme="dark"] .bb-theme-root [data-no-invert] {
   filter: invert(1) hue-rotate(180deg);
 }
+/* The inline shadows are dark (rgba(28,28,28,...)); once the page is inverted
+   they become light and read as a white "glow" behind cards, buttons and text.
+   Neutralise every shadow in dark mode so surfaces stay cleanly flat. */
+html[data-theme="dark"] .bb-theme-root *,
+html[data-theme="dark"] .bb-theme-root *::before,
+html[data-theme="dark"] .bb-theme-root *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Dashboard left-menu layout: sidebar on desktop, stacks to a horizontal
+   scrolling menu row on smaller screens. */
+@media (max-width: 900px) {
+  .bb-dash-layout { flex-direction: column; }
+  .bb-dash-side { position: static !important; width: 100% !important; flex-basis: auto !important; top: auto !important; }
+  .bb-dash-menu { flex-direction: row !important; overflow-x: auto; gap: 6px !important; padding-bottom: 6px; }
+}
 
 /* Accessibility: honor the OS "reduce motion" preference. Additive only —
    the visual design is unchanged for everyone who hasn't requested it. */

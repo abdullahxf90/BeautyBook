@@ -14,8 +14,8 @@ const navLinks: Array<{ label: string; href: string }> = [
   { label: "About", href: "/about" },
 ];
 
-// Formerly hidden inside a "More" dropdown — now always visible in a strip
-// below the top bar so every visitor discovers these sections.
+// Kept out of the top bar (per request) but still reachable from the mobile
+// menu and the footer.
 const quickLinks: Array<{ label: string; href: string }> = [
   { label: "Smart Search", href: "/smart-search" },
   { label: "Gift Cards", href: "/gift-cards" },
@@ -27,9 +27,18 @@ const quickLinks: Array<{ label: string; href: string }> = [
   { label: "Support", href: "/support" },
 ];
 
+// Each role lands on its own dashboard.
+export function dashboardPath(role?: string): string {
+  if (role === "ADMIN" || role === "SUPER_ADMIN") return "/admin";
+  if (role === "OWNER" || role === "MANAGER" || role === "RECEPTIONIST") return "/salon-dashboard";
+  if (role === "STAFF") return "/staff";
+  return "/dashboard";
+}
+
 export default function Nav() {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const homeDash = dashboardPath(user?.role);
 
   return (
     <>
@@ -46,7 +55,6 @@ export default function Nav() {
         backdropFilter: "blur(18px)",
         WebkitBackdropFilter: "blur(18px)",
         background: "rgba(250,248,247,.7)",
-        borderBottom: "1px solid rgba(28,28,28,.055)",
       }}
     >
       <Link
@@ -79,19 +87,12 @@ export default function Nav() {
 
         {user ? (
           <>
-            <Link href="/dashboard" style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1C", textDecoration: "none", padding: "9px 14px" }}>
+            <Link href={homeDash} style={{ fontSize: 14, fontWeight: 600, color: "#1C1C1C", textDecoration: "none", padding: "9px 14px" }}>
               {user.name.split(" ")[0]}
             </Link>
-            {(user.role === "OWNER" || user.role === "ADMIN" || user.role === "SUPER_ADMIN") && (
-              <Link href={user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? "/admin" : "/salon-dashboard"} style={{ fontSize: 13, fontWeight: 600, color: "#B06A85", textDecoration: "none", padding: "9px 12px", border: "1px solid rgba(176,106,133,.3)", borderRadius: 14 }}>
-                Dashboard
-              </Link>
-            )}
-            {user.role === "STAFF" && (
-              <Link href="/staff" style={{ fontSize: 13, fontWeight: 600, color: "#B06A85", textDecoration: "none", padding: "9px 12px", border: "1px solid rgba(176,106,133,.3)", borderRadius: 14 }}>
-                Staff Dashboard
-              </Link>
-            )}
+            <Link href={homeDash} style={{ fontSize: 13, fontWeight: 600, color: "#B06A85", textDecoration: "none", padding: "9px 12px", border: "1px solid rgba(176,106,133,.3)", borderRadius: 14 }}>
+              {homeDash === "/admin" ? "Admin" : homeDash === "/salon-dashboard" ? "My Shop" : homeDash === "/staff" ? "My Schedule" : "Dashboard"}
+            </Link>
             <button onClick={() => void logout()} className="bb-btn" style={{ fontSize: 14, fontWeight: 600, color: "#FAF8F7", border: "none", cursor: "pointer", padding: "10px 20px", borderRadius: 12, background: "#1C1C1C", whiteSpace: "nowrap", boxShadow: "0 6px 18px rgba(28,28,28,.14)" }}>
               Logout
             </button>
@@ -117,42 +118,6 @@ export default function Nav() {
         </div>
       )}
     </nav>
-
-    {/* Quick links — always visible, scrolls with the page (not part of the sticky bar).
-        Outer scrolls on small screens; inner uses margin-auto so the pills stay
-        centered when they fit and scroll from the start when they overflow. */}
-    <div
-      style={{
-        padding: "10px clamp(24px,5vw,72px)",
-        background: "rgba(235,200,211,.16)",
-        borderBottom: "1px solid rgba(28,28,28,.05)",
-        overflowX: "auto",
-        WebkitOverflowScrolling: "touch",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "max-content", maxWidth: "100%", margin: "0 auto" }}>
-        {quickLinks.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className="bb-navlink"
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#4a4446",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
-              padding: "7px 14px",
-              borderRadius: 16,
-              background: "rgba(255,255,255,.75)",
-              border: "1px solid rgba(28,28,28,.07)",
-            }}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </div>
-    </div>
     </>
   );
 }
