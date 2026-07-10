@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Reveal from "./Reveal";
+import ShopLogo from "./ShopLogo";
 import { rupees, SalonSummary } from "@/lib/api";
 
 /** Featured salon card — ported exactly from the homepage design. */
@@ -59,12 +60,15 @@ export default function SalonCard({ salon, slots }: { salon: SalonSummary; slots
           </div>
         </Link>
         <div style={{ padding: "20px 22px 22px" }}>
-          <Link href={`/salon/${salon.slug}`} style={{ textDecoration: "none", color: "inherit" }}>
-            <h3 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 24, fontWeight: 600 }}>{salon.name}</h3>
+          <Link href={`/salon/${salon.slug}`} style={{ textDecoration: "none", color: "inherit", display: "flex", alignItems: "center", gap: 12 }}>
+            <ShopLogo name={salon.name} size={42} />
+            <div style={{ minWidth: 0 }}>
+              <h3 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 21, fontWeight: 600, letterSpacing: "-.01em" }}>{salon.name}</h3>
+              <p style={{ fontSize: 13, color: "#5a5457", marginTop: 1 }}>
+                {salon.area.name}, {salon.area.city.name}
+              </p>
+            </div>
           </Link>
-          <p style={{ fontSize: 14, color: "#5a5457", marginTop: 2 }}>
-            {salon.area.name}, {salon.area.city.name}
-          </p>
           {slots && slots.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
               {slots.map((slot) => (

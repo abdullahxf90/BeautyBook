@@ -4,6 +4,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 import FavoriteButton from "@/components/FavoriteButton";
+import ShopLogo from "@/components/ShopLogo";
 import { apiTry, apiTryStatus, ReviewInfo, rupees, SalonDetail } from "@/lib/api";
 
 const serif = "'Space Grotesk',sans-serif";
@@ -63,8 +64,11 @@ export default async function SalonPage({ params }: { params: { slug: string } }
                   </span>
                 )}
               </div>
-              <h1 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(38px,5.5vw,64px)", marginTop: 14, lineHeight: 1.05 }}>{salon.name}</h1>
-              <p style={{ fontSize: 16, color: "#5a5457", marginTop: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 14 }}>
+                <ShopLogo name={salon.name} size={60} />
+                <h1 style={{ fontFamily: serif, fontWeight: 500, fontSize: "clamp(34px,5vw,60px)", lineHeight: 1.05 }}>{salon.name}</h1>
+              </div>
+              <p style={{ fontSize: 16, color: "#5a5457", marginTop: 10 }}>
                 {salon.area.name}, {salon.area.city.name} · ★ {salon.rating.toFixed(1)} ({salon.reviewCount} reviews)
               </p>
               <p style={{ fontSize: 16, lineHeight: 1.6, color: "#5a5457", marginTop: 14, maxWidth: "62ch" }}>{salon.description}</p>
@@ -102,14 +106,16 @@ export default async function SalonPage({ params }: { params: { slug: string } }
                 {salon.services.map((svc) => (
                   <div
                     key={svc.id}
+                    className="bb-lift"
                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "18px 20px", borderRadius: 18, background: "#fff", border: "1px solid rgba(28,28,28,.06)" }}
                   >
-                    <div>
+                    <Link href={`/salon/${salon.slug}/service/${svc.id}`} style={{ textDecoration: "none", color: "inherit", flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 16, fontWeight: 600 }}>{svc.name}</div>
                       <div style={{ fontSize: 13, color: "#5a5457", marginTop: 3 }}>
                         {svc.category.name} · {svc.durationMin} min{svc.description ? ` · ${svc.description}` : ""}
                       </div>
-                    </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#B06A85" }}>View details →</span>
+                    </Link>
                     <div style={{ display: "flex", alignItems: "center", gap: 16, whiteSpace: "nowrap" }}>
                       <span style={{ fontFamily: serif, fontSize: 20, fontWeight: 600 }}>{rupees(svc.price)}</span>
                       <Link
