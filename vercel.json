@@ -16,6 +16,6 @@
   "routes": [
     { "src": "/health", "dest": "apps/api/src/index.ts" },
     { "src": "/api/(.*)", "dest": "apps/api/src/index.ts" },
-    { "src": "/(.*)", "dest": "apps/website/$1" }
+    { "handle": "filesystem" }
   ]
 }
